@@ -35,6 +35,7 @@ Todos los umbrales viven en `config.yaml`, no en el código.
 
 - Supermercado (`shop=supermarket` de OSM) a ≤ 640 m en línea recta (≈ 10 min andando con factor de rodeo 1,3).
 - Lavadora: `pračka` → OK; `bez pračky` → ❌; sin mención → ⚠️.
+- Habitación propia: cama en habitación doble/triple (`2L pokoj`, `dvoulůžkový`) → ❌.
 - Amueblado: `nezařízený` → ⚠️; sin mención → solo informativo.
 - Informativo, sin filtrar: fecha de entrada, fianza (`kauce`), comisión (`provize`), 🌳 si está a ≤ 1 km de Lužánky.
 
