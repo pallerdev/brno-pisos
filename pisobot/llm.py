@@ -111,7 +111,8 @@ class Gemini:
         }
         try:
             response = self.http.post(
-                GEMINI_URL.format(model=self.model), headers={"x-goog-api-key": self.api_key}, json=body, timeout=30,
+                GEMINI_URL.format(model=self.model), headers={"x-goog-api-key": self.api_key}, json=body,
+                timeout=30, follow_redirects=False,
             )
             response.raise_for_status()
             raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]

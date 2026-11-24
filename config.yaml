@@ -66,8 +66,8 @@ digest:
   hour: 19
 
 llm:
-  model: "gemini-2.5-flash"
-  daily_limit: 200
+  model: "gemini-3.5-flash-lite"
+  daily_limit: 200           # tope del bot; la cuota del proyecto se consulta en Google AI Studio
 
 collectors:
   bazos_psc_prefixes: ["60", "61", "62", "63", "64"]
