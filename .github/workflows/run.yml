@@ -1,0 +1,50 @@
+name: run
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pisobot-state
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Una ejecución en cola necesita el estado que guardó la anterior.
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install -e .
+      - run: python -m pisobot
+        env:
+          DISCORD_WEBHOOK_YO: ${{ secrets.DISCORD_WEBHOOK_YO }}
+          DISCORD_WEBHOOK_GRUPO: ${{ secrets.DISCORD_WEBHOOK_GRUPO }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_REVISAR_CHANNEL_ID: ${{ secrets.DISCORD_REVISAR_CHANNEL_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          WORK_LATLON: ${{ secrets.WORK_LATLON }}
+          NOMINATIM_URL: ${{ vars.NOMINATIM_URL }}
+      - name: Guardar estado
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data
+          if ! git diff --cached --quiet; then
+            git commit -m "data: actualizar estado"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF"
+          fi

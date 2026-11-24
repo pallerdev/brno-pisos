@@ -70,3 +70,17 @@ def test_geocode_cached_miss_makes_no_request():
     cache = {"nowhere": None}
     assert make(handler, cache, []).geocode("Nowhere") is None
     assert attempts == []
+
+
+def test_cache_for_review_shares_pacing_but_does_not_store_private_queries():
+    cache, sleeps = {}, []
+    clock = iter([0.0, 0.2, 15.0]).__next__
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=[]))
+    geocoder = Geocoder(httpx.Client(transport=transport), cache, sleep=sleeps.append, clock=clock, min_interval=15)
+    review = geocoder.with_cache({})
+
+    assert geocoder.geocode("Calle pública, Brno") is None
+    assert review.geocode("Calle de Discord, Brno") is None
+    assert review.geocode("Calle de Discord, Brno") is None
+    assert sleeps == [pytest.approx(14.8)]
+    assert cache == {"calle pública, brno": None}
