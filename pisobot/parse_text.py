@@ -42,19 +42,22 @@ _WASHER_NEG = [
     r"\bbez (?:prack|pracek)",
     r"\bneni (?:tu |zde )?prack",
     r"\bprack\w* (?:tu |zde )?neni\b",
-    r"\bnem(?:a|ame)\b.{0,20}prack",
-    r"\bprack\w* nem(?:a|ame)\b",
+    r"\bprack(?:u|y) nem(?:a|ame)\b",
     r"\bno washing machine",
 ]
+# Se busca sobre el texto por cláusulas (los saltos de línea cuentan como corte): "Nemá balkon\nPračka" no niega nada.
+_WASHER_NEG_CLAUSE = [r"\bnem(?:a|ame)\s+(?:[a-z]+\s+){0,2}prack"]
 _WASHER_POS = [r"\bprac(?:ka|ky|ku|kou|ce|kosusick\w*)\b", r"\bwashing machine", r"\bwasher\b"]
 # Una conexión para lavadora no es una lavadora: se quita antes de buscar positivos.
-_WASHER_HOOKUP = [r"\bpripoj\w* (?:na |pro )?prack\w*", r"\bzapojen\w* (?:vlastni )?prack\w*"]
+_WASHER_HOOKUP = [r"\b(?:pripojk|pripojeni|zapojeni)\w* (?:[a-z]+ )?(?:na |pro )?prack\w*"]
 
 
 def _washer(text: str) -> bool | None:
-    if any(re.search(p, text) for p in _WASHER_NEG):
+    t = norm(text)
+    clauses = norm(text.replace("\n", " | "))
+    if any(re.search(p, t) for p in _WASHER_NEG) or any(re.search(p, clauses) for p in _WASHER_NEG_CLAUSE):
         return False
-    rest = text
+    rest = t
     for p in _WASHER_HOOKUP:
         rest = re.sub(p, " ", rest)
     if any(re.search(p, rest) for p in _WASHER_POS):
@@ -75,14 +78,14 @@ _ENERGY_POS = [
 ]
 
 _FURNISHED_NEG = [
-    r"\bnezarizen", r"\bnevybaven", r"\bbez nabytku", r"\bneni zarizen", r"\bbez zarizen",
+    r"\bnezarizen", r"\bnevybaven", r"\bbez nabytku", r"\bneni zarizen", r"\bneni vybaven", r"\bbez zarizen",
     r"\bbez vybaven", r"\bunfurnished",
 ]
 _FURNISHED_POS = [r"\bzarizen", r"\bvybaven", r"\bfurnished"]
 
 _COMMISSION_NEG = [
     r"\bbez provize", r"\bbez rk\b", r"\bneplatite (?:zadnou )?provizi", r"\bno commission",
-    r"\bprovize:? 0\b", r"\bzadn\w* provi", r"\bnehradite provi", r"\bneuctujeme provi",
+    r"\bprovize:? 0(?![\d.,]\d)", r"\bzadn\w* provi", r"\bnehradite provi", r"\bneuctujeme provi",
 ]
 _COMMISSION_POS = [r"\bproviz", r"\bcommission"]
 
@@ -121,7 +124,7 @@ _SHARED_BEDROOM = re.compile(
 def parse_text(text: str) -> TextFacts:
     t = norm(text)
     return TextFacts(
-        washing_machine=_washer(t),
+        washing_machine=_washer(text),
         energy_included=_tri(t, _ENERGY_NEG, _ENERGY_POS),
         furnished=_tri(t, _FURNISHED_NEG, _FURNISHED_POS),
         walkthrough_room=_walkthrough(t),

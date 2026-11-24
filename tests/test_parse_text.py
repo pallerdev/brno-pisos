@@ -74,7 +74,7 @@ def test_parse_area(text, expected):
     ("8 500 Kč", 8500),
     ("12.000,- Kč", 12000),
     ("Cena: 9500 CZK/měsíc", 9500),
-    ("7 900 Kč", 7900),
+    ("7\u00a0900 Kč", 7900),
     ("3+1 75 m2 15000 Kč", 15000),
     ("Dohodou", None),
 ])
@@ -203,3 +203,48 @@ def test_commission_fix_round(text, expected):
 ])
 def test_normalize_disposition_fix_round(raw, expected):
     assert normalize_disposition(raw) == expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Byt nemá balkon, ale pračka je v bytě", True),
+    ("Nemá výtah. Pračka je ve sklepě.", True),
+    ("Nemáme parkování, pračka ano", True),
+    ("Byt nemá myčku, ale je tu pračka", True),
+    ("Nemá balkon\nPračka ve společných prostorách", True),
+    ("Nemáme pračku", False),
+    ("nemá pračku", False),
+    ("Nemáme tu pračku", False),
+    ("Nemáme tu žádnou pračku", False),
+    ("Pračku nemáme", False),
+])
+def test_washing_machine_negation_window(text, expected):
+    assert parse_text(text).washing_machine is expected
+
+
+def test_washing_machine_mirror_negation_needs_accusative():
+    assert parse_text("Pračka nemá poruchu").washing_machine is True
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("V bytě je připojená pračka", True),
+    ("Zapojená pračka v koupelně", True),
+    ("Přípojka na pračku", None),
+    ("Možnost zapojení vlastní pračky", None),
+    ("Připojení pro pračku", None),
+    ("Přípojka vody pro pračku", None),
+])
+def test_washing_machine_hookup_nouns(text, expected):
+    assert parse_text(text).washing_machine is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Provize 0,5 nájmu", True),
+    ("Provize 0.5 nájmu", True),
+    ("Provize: 0 Kč", False),
+])
+def test_commission_zero_vs_fraction(text, expected):
+    assert parse_text(text).commission is expected
+
+
+def test_furnished_not_furnished_with_vybaveny():
+    assert parse_text("Byt není vybavený").furnished is False
