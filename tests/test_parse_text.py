@@ -74,7 +74,7 @@ def test_parse_area(text, expected):
     ("8 500 Kč", 8500),
     ("12.000,- Kč", 12000),
     ("Cena: 9500 CZK/měsíc", 9500),
-    ("7 900 Kč", 7900),
+    ("7 900 Kč", 7900),
     ("3+1 75 m2 15000 Kč", 15000),
     ("Dohodou", None),
 ])
@@ -106,3 +106,100 @@ def test_normalize_disposition(raw, expected):
 ])
 def test_bedrooms(disposition, expected):
     assert bedrooms(disposition) == expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Byt je bez\npračky", False),
+    ("bez  pračky", False),
+    ("Nemáme pračku", False),
+    ("nemá pračku", False),
+    ("Pračku nemáme", False),
+    ("Přípojka na pračku", None),
+    ("Možnost zapojení vlastní pračky", None),
+    ("Připojení pro pračku", None),
+    ("Klidný byt bez práce", None),
+])
+def test_washing_machine_fix_round(text, expected):
+    assert parse_text(text).washing_machine is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Nájem není včetně energií", False),
+    ("Včetně všech poplatků (vč. energií)", True),
+])
+def test_energy_included_fix_round(text, expected):
+    assert parse_text(text).energy_included is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Byt není zařízený", False),
+    ("Pronájem bez zařízení", False),
+    ("Byt bez vybavení", False),
+    ("Nezařízený byt", False),
+])
+def test_furnished_fix_round(text, expected):
+    assert parse_text(text).furnished is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("elektrické vytápění a ohřev vody", True),
+    ("Topení: elektrické", True),
+    ("Vytápění: elektrické", True),
+    ("Elektrické podlahové topení", True),
+    ("Byt s elektrokotlem", True),
+    ("přímotop v pokoji", True),
+    ("plynový kotel", False),
+    ("ústřední topení", False),
+])
+def test_electric_heating(text, expected):
+    assert parse_text(text).electric_heating is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("místo v 2L pokoji", True),
+    ("2L pokoj", True),
+    ("dvoulůžkový pokoj", True),
+    ("neprůchozího dvoulůžkového pokoje", True),
+    ("pokoj je dvoulůžkový", True),
+    ("2lůžkový pokoj", True),
+    ("2-lůžkový pokoj", True),
+    ("dvojlůžkový pokoj", True),
+    ("třílůžkový pokoj", True),
+    ("trojlůžkový pokoj", True),
+    ("ložnice s dvoulůžkovou postelí", False),
+    ("dvoulůžková postel", False),
+    ("bojler 3l", False),
+    ("jednolůžkový pokoj", False),
+])
+def test_shared_bedroom_fix_round(text, expected):
+    assert parse_text(text).shared_bedroom is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("pokoje nejsou průchozí", False),
+    ("bez průchozích pokojů", False),
+    ("průchozí pokoj", True),
+    ("neprůchozí pokoj", False),
+])
+def test_walkthrough_room(text, expected):
+    assert parse_text(text).walkthrough_room is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Provize: 0 Kč", False),
+    ("Žádná provize", False),
+    ("Nehradíte provizi", False),
+    ("Neúčtujeme provizi", False),
+    ("bez provize", False),
+])
+def test_commission_fix_round(text, expected):
+    assert parse_text(text).commission is expected
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Panelový byt 2+1(kk)", "2+kk"),
+    ("Panelový byt 1+1(kk)", "1+kk"),
+    ("Panelový byt 2+1", "2+1"),
+])
+def test_normalize_disposition_fix_round(raw, expected):
+    assert normalize_disposition(raw) == expected

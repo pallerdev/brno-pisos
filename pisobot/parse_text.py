@@ -24,7 +24,9 @@ class TextFacts:
 
 def norm(text: str) -> str:
     text = unicodedata.normalize("NFKD", text.lower())
-    return "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    # Colapsar espacios: los anuncios traen saltos de línea y dobles espacios entre palabras clave.
+    return " ".join(text.split())
 
 
 def _tri(text: str, negative: list[str], positive: list[str]) -> bool | None:
@@ -35,36 +37,97 @@ def _tri(text: str, negative: list[str], positive: list[str]) -> bool | None:
     return None
 
 
-_WASHER_NEG = [r"\bbez prac", r"\bneni (?:tu |zde )?prac", r"\bprac\w* (?:tu |zde )?neni\b", r"\bno washing machine"]
+# Solo "prack*" (pračka) y nunca "prac" a secas: "bez práce" no es lavadora.
+_WASHER_NEG = [
+    r"\bbez (?:prack|pracek)",
+    r"\bneni (?:tu |zde )?prack",
+    r"\bprack\w* (?:tu |zde )?neni\b",
+    r"\bnem(?:a|ame)\b.{0,20}prack",
+    r"\bprack\w* nem(?:a|ame)\b",
+    r"\bno washing machine",
+]
 _WASHER_POS = [r"\bprac(?:ka|ky|ku|kou|ce|kosusick\w*)\b", r"\bwashing machine", r"\bwasher\b"]
+# Una conexión para lavadora no es una lavadora: se quita antes de buscar positivos.
+_WASHER_HOOKUP = [r"\bpripoj\w* (?:na |pro )?prack\w*", r"\bzapojen\w* (?:vlastni )?prack\w*"]
+
+
+def _washer(text: str) -> bool | None:
+    if any(re.search(p, text) for p in _WASHER_NEG):
+        return False
+    rest = text
+    for p in _WASHER_HOOKUP:
+        rest = re.sub(p, " ", rest)
+    if any(re.search(p, rest) for p in _WASHER_POS):
+        return True
+    return None
+
 
 _ENERGY_NEG = [
     r"\+\s*energi", r"\bplus energi", r"\benergie (?:dle|podle) spotreby", r"\benergie zvlast",
     r"\b(?:energie|elektrina|elektrinu|plyn) (?:na|pres) vlastni smlouv", r"\bbez energi",
+    r"\bneni (?:vcetne|v cene) energi",
     r"\+\s*elektrin", r"\butilities not included", r"\+\s*utilities",
 ]
 _ENERGY_POS = [
     r"\bvcetne (?:vsech )?energi", r"\bvcetne (?:sluzeb|poplatku) a energi", r"\bvse v cene",
-    r"\benergie v cene", r"\ball inclusive", r"\butilities included", r"\bincluding utilities",
+    r"\benergie v cene", r"\bvc?\.\s*energi", r"\ball inclusive", r"\butilities included",
+    r"\bincluding utilities",
 ]
 
-_FURNISHED_NEG = [r"\bnezarizen", r"\bnevybaven", r"\bbez nabytku", r"\bunfurnished"]
+_FURNISHED_NEG = [
+    r"\bnezarizen", r"\bnevybaven", r"\bbez nabytku", r"\bneni zarizen", r"\bbez zarizen",
+    r"\bbez vybaven", r"\bunfurnished",
+]
 _FURNISHED_POS = [r"\bzarizen", r"\bvybaven", r"\bfurnished"]
 
-_COMMISSION_NEG = [r"\bbez provize", r"\bbez rk\b", r"\bneplatite (?:zadnou )?provizi", r"\bno commission"]
+_COMMISSION_NEG = [
+    r"\bbez provize", r"\bbez rk\b", r"\bneplatite (?:zadnou )?provizi", r"\bno commission",
+    r"\bprovize:? 0\b", r"\bzadn\w* provi", r"\bnehradite provi", r"\bneuctujeme provi",
+]
 _COMMISSION_POS = [r"\bproviz", r"\bcommission"]
+
+_WALKTHROUGH_NEG = [r"\bnejsou pruchoz", r"\bneni pruchoz", r"\bbez pruchoz"]
+
+_ELECTRIC_HEATING = [
+    r"\belektrick\w* (?:podlahov\w* )?(?:topen|vytapen)",
+    r"\b(?:topen|vytapen)\w*:?\s*elektrick\w*",
+    r"\bprimotop",
+    r"\bakumulacni kamna",
+    r"\belektrokot\w*",
+]
+
+
+def _walkthrough(text: str) -> bool:
+    if any(re.search(p, text) for p in _WALKTHROUGH_NEG):
+        return False
+    return bool(re.search(r"\bpruchoz", text))
+
+
+def _electric_heating(text: str) -> bool:
+    return any(re.search(p, text) for p in _ELECTRIC_HEATING)
+
+
+# "2L pokoj", "2-lůžkový", "dvoulůžkový", "třílůžkový": la cuenta de camas solo cuenta
+# si va junto al nombre "pokoj" (en cualquier orden). Sin ese nombre, "ložnice s dvoulůžkovou
+# postelí" o "bojler 3l" darían falsos positivos.
+_BEDS = r"(?:[2-4]-?\s*l(?:uzk\w*)?|(?:dvou|dvoj|tri|troj)\s*luzk\w*)"
+_SHARED_BEDROOM = re.compile(
+    rf"\b{_BEDS}\s+pokoj"
+    rf"|\bpokoj\w*\s+(?:je\s+)?{_BEDS}\b"
+    r"|\bshared room"
+)
 
 
 def parse_text(text: str) -> TextFacts:
     t = norm(text)
     return TextFacts(
-        washing_machine=_tri(t, _WASHER_NEG, _WASHER_POS),
+        washing_machine=_washer(t),
         energy_included=_tri(t, _ENERGY_NEG, _ENERGY_POS),
         furnished=_tri(t, _FURNISHED_NEG, _FURNISHED_POS),
-        walkthrough_room=bool(re.search(r"\bpruchoz", t)),
-        electric_heating=bool(re.search(r"\belektrick\w* topen|\bprimotop|\bakumulacni kamna", t)),
+        walkthrough_room=_walkthrough(t),
+        electric_heating=_electric_heating(t),
         commission=_tri(t, _COMMISSION_NEG, _COMMISSION_POS),
-        shared_bedroom=bool(re.search(r"\b[2-4]\s*l\s+pokoj|\b[2-4]l\b|\bdvouluzkov|\btrojluzkov|\bshared room", t)),
+        shared_bedroom=bool(_SHARED_BEDROOM.search(t)),
     )
 
 
@@ -103,6 +166,10 @@ def normalize_disposition(raw: str | None) -> str | None:
     n = norm(s)
     if "garson" in n:
         return "1+kk"
+    # eSpolubydleni escribe "2+1(kk)": ambiguo. Se toma como kk para no contar dormitorios de más.
+    m = re.search(r"\b([1-7])\s*\+\s*1\s*\(\s*kk\s*\)", n)
+    if m:
+        return f"{m.group(1)}+kk"
     # Variantes reales: "2+kk", "2 + KK", "2KK", "1.kk", "2 + 1". Nunca leer "20 000" como disposición.
     m = re.search(r"\b([1-7])\s*[+.]?\s*kk\b", n)
     if m:
