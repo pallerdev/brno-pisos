@@ -43,6 +43,8 @@ class Listing:
     furnished: bool | None = None
     # El listado no trae todo (texto, fecha...): hay que pedir el detalle antes de evaluar
     needs_detail: bool = False
+    # Cuando los poplatky son para una persona y el anuncio cobra un suplemento por cada persona más.
+    fees_per_extra_person: int = 0
 
     @property
     def key(self) -> str:

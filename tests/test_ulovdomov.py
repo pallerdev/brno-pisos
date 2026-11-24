@@ -45,7 +45,8 @@ def test_parse_flats():
     first = listings[0]
     assert first.source_id == "5683439"
     assert first.url == "https://www.ulovdomov.cz/inzerat/pronajem-brno-brno-mesto-pekarska-2-1/5683439"
-    assert (first.kind, first.rent, first.fees, first.disposition, first.area_m2) == (Kind.FLAT, 18900, None, "2+1", 50)
+    assert (first.kind, first.rent, first.fees, first.disposition, first.area_m2) == (Kind.FLAT, 18900, 2300, "2+1", 50)
+    assert first.fees_per_extra_person == 600
     assert (first.lat, first.lon) == (49.19216, 16.60144)
     assert first.location_precision == "exact"
     assert first.available_from == date(2026, 12, 1)
@@ -69,6 +70,7 @@ def test_parse_rooms():
 
 def test_price_note_is_appended_to_description():
     second = parse_offers(FLATS)[1]
+    assert (second.fees, second.fees_per_extra_person) == (2550, 850)
     assert second.description.endswith("\n+ zálohy na  služby 2.550 Kč/měs./1 osoba, každá další osoba +850 Kč/měs.,"
                                        "zálohu na elektřinu hradní nájemce přímo dodavateli, "
                                        "vratná kauce 1 měsíční nájem (platba vč. služeb), + provize RK")
@@ -250,8 +252,13 @@ def test_rent_is_a_czk_integer_or_none(raw, expected):
     (_MISSING, None),
 ])
 def test_fees_and_deposit_follow_the_same_rules(raw, expected):
-    listing = parse_offers(_with_offer(FLATS, monthlyFeesPrice=raw, depositPrice=raw))[0]
+    listing = parse_offers(_with_offer(FLATS, description="", monthlyFeesPrice=raw, depositPrice=raw))[0]
     assert (listing.fees, listing.deposit) == (expected, expected)
+
+
+def test_deposit_in_text_does_not_supply_monthly_fees():
+    listing = parse_offers(_with_offer(FLATS, description="Vratná záloha 40 000 Kč."))[0]
+    assert listing.fees is None and listing.fees_per_extra_person == 0
 
 
 def test_non_czk_currency_drops_every_price():

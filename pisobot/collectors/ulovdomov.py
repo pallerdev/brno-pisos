@@ -1,16 +1,23 @@
 """UlovDomov: API JSON de su propia web (robots.txt: Allow /). Habitaciones = offerType "coliving"."""
 from __future__ import annotations
 
+import re
 from datetime import date
 
 import httpx
 
+from pisobot.collectors.base import price_czk
 from pisobot.models import Kind, Listing
-from pisobot.parse_text import normalize_disposition
+from pisobot.parse_text import norm, normalize_disposition
 
 API_URL = "https://ud.api.ulovdomov.cz/v1/offer/find"
 BOUNDS = {"northEast": {"lat": 49.30, "lng": 16.75}, "southWest": {"lat": 49.10, "lng": 16.45}}
 MAX_PRICE = 48000  # techo del perfil grupo con 4 personas; el resto lo decide el prefiltro
+_OCCUPANCY_FEES = re.compile(
+    r"\bzaloh[ay] na sluzby (?:je )?(?P<base>\d[\d .]*?)\s*kc"
+    r"[ /a-z.]*1 osob[au](?:\s*/\s*mes[a-z.]*)?\s*,\s*"
+    r"kazda dalsi osoba\s*\+\s*(?P<extra>\d[\d .]*?)\s*kc"
+)
 
 
 def _whole(value) -> int | None:
@@ -72,6 +79,14 @@ def _listing(offer: dict) -> Listing:
     if offer.get("priceNote"):
         description += f"\n{offer['priceNote']}"
     room = offer.get("offerType") == "coliving"
+    fees = _money(offer, "monthlyFeesPrice")
+    extra = 0
+    rent = _money(offer, "rentalPrice") or None
+    if fees is None and offer.get("monthlyFeesPrice") is None and rent is not None and not room:
+        match = _OCCUPANCY_FEES.search(norm(description))
+        if match:
+            fees = price_czk(f"{match['base']} Kč")
+            extra = price_czk(f"{match['extra']} Kč") or 0
     # En una habitación `area` puede ser la del piso entero (62 m² para un cuarto de tres camas)
     area = None if room else _area(offer.get("area"))
     return Listing(
@@ -81,8 +96,9 @@ def _listing(offer: dict) -> Listing:
         title=offer.get("title") or "",
         kind=Kind.ROOM if room else Kind.FLAT,
         # Un alquiler de 0 es un dato roto: pasaría el filtro de precio como si fuera gratis
-        rent=_money(offer, "rentalPrice") or None,
-        fees=_money(offer, "monthlyFeesPrice"),
+        rent=rent,
+        fees=fees,
+        fees_per_extra_person=extra,
         disposition=normalize_disposition(offer.get("disposition")),
         area_m2=area,
         deposit=_money(offer, "depositPrice"),

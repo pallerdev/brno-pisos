@@ -57,6 +57,16 @@ def test_price_none_without_rent(cfg):
     assert price_of(make(rent=None), TextFacts(), cfg.raw["energy_estimates"]) is None
 
 
+def test_group_uses_monthly_fees_for_each_occupancy(cfg):
+    listing = make(kind=Kind.FLAT, rent=40000, fees=2000, fees_per_extra_person=1000,
+                   disposition="4+1", fees_include_energy=True)
+    evaluation = evaluate(cand(listing), "grupo", cfg)
+    assert evaluation.per_person == {3: 14667, 4: 11250}
+    assert evaluation.verdict is Verdict.MAYBE
+    listing.rent = 43500
+    assert "grupo" not in prefilter(listing, GOOD, cfg)
+
+
 # --- transporte ---
 
 YO_RULE = {"max_minutes": 30, "direct": {"modes": ["TRAM"], "max_minutes": 40, "max_walk_minutes": 10}}

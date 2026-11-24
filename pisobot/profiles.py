@@ -16,6 +16,10 @@ class Price:
     fees: int
     energy_estimate: int
     energy_included: bool
+    fees_per_extra_person: int = 0
+
+    def total_for(self, people: int) -> int:
+        return self.total + self.fees_per_extra_person * (people - 1)
 
 
 @dataclass
@@ -57,6 +61,7 @@ def price_of(listing: Listing, facts: TextFacts, estimates: dict) -> Price | Non
         fees=fees,
         energy_estimate=estimate,
         energy_included=bool(included),
+        fees_per_extra_person=listing.fees_per_extra_person,
     )
 
 
@@ -94,7 +99,7 @@ def prefilter(listing: Listing, facts: TextFacts, cfg: Config) -> list[str]:
             _, options = _group_split(listing, profile)
             if not options:
                 continue
-            if price is not None and price.total / max(options) > profile["per_person_max"]:
+            if price is not None and all(price.total_for(p) > profile["per_person_max"] * p for p in options):
                 continue
         elif price is not None and price.total > profile["max_total"]:
             continue
@@ -174,7 +179,7 @@ def _check_group(ev: Evaluation, listing: Listing, profile: dict) -> None:
     if ev.price is None:
         ev.questions.append("precio no indicado")
         return
-    ev.per_person = {p: math.ceil(ev.price.total / p) for p in options}
+    ev.per_person = {p: math.ceil(ev.price.total_for(p) / p) for p in options}
     best = min(ev.per_person.values())
     if best > profile["per_person_max"]:
         ev.fails.append(f"{best} por persona > {profile['per_person_max']}")
