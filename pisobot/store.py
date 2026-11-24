@@ -17,7 +17,9 @@ _DEFAULTS = {
         "pending": {},
         "last_digest": None,
         "failures": {},
+        "failure_alerted": {},
         "transit_retries": {},
+        "deliveries": {},
         "llm": {"date": None, "count": 0},
     },
 }
@@ -75,6 +77,14 @@ class Store:
         if fp:
             self.seen["fingerprints"][fp] = today.isoformat()
 
+    def refresh_seen(self, listing: Listing, today: date) -> None:
+        """Renueva los ids y las huellas ya vistos mientras los portales aún los publiquen."""
+        stamp = today.isoformat()
+        self.seen["ids"][listing.key] = stamp
+        fp = fingerprint(listing)
+        if fp in self.seen["fingerprints"]:
+            self.seen["fingerprints"][fp] = stamp
+
     def prune(self, today: date, days: int = 60) -> None:
         limit = (today - timedelta(days=days)).isoformat()
         for table in ("ids", "fingerprints"):
@@ -83,8 +93,8 @@ class Store:
     def save(self) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
         # Escritura a .tmp + os.replace: un corte a mitad no deja un JSON truncado.
-        # state.json va el último: si la ejecución cae antes, el estado anterior sigue siendo coherente.
-        for name, data in (("seen.json", self.seen), ("cache.json", self.cache), ("state.json", self.state)):
+        # La cola debe guardarse antes que los ids vistos: un corte entre archivos conserva los avisos pendientes.
+        for name, data in (("state.json", self.state), ("seen.json", self.seen), ("cache.json", self.cache)):
             path = self.dir / name
             tmp = path.with_name(name + ".tmp")
             tmp.write_text(

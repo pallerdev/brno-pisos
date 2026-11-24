@@ -1,3 +1,4 @@
+import os
 from datetime import date, timedelta
 
 import pytest
@@ -90,6 +91,25 @@ def test_save_leaves_no_tmp_files_and_reloads_equal(tmp_path):
     assert reloaded.seen == store.seen
     assert reloaded.cache == store.cache
     assert reloaded.state == store.state
+
+
+def test_interrupted_save_keeps_pending_notifications(tmp_path, monkeypatch):
+    store = Store(tmp_path)
+    store.mark_seen(make(), date(2026, 11, 24))
+    store.state["pending"]["grupo"] = [{"title": "Anuncio dudoso"}]
+    replace = os.replace
+
+    def stop_at_seen(source, target):
+        if target.name == "seen.json":
+            raise OSError("escritura interrumpida")
+        replace(source, target)
+
+    monkeypatch.setattr("pisobot.store.os.replace", stop_at_seen)
+    with pytest.raises(OSError, match="interrumpida"):
+        store.save()
+    restored = Store(tmp_path)
+    assert restored.state["pending"] == {"grupo": [{"title": "Anuncio dudoso"}]}
+    assert restored.is_new(make())
 
 
 def test_listing_without_fingerprint_is_deduped_by_id(tmp_path):
