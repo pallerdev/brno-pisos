@@ -114,9 +114,24 @@ def _electric_heating(text: str) -> bool:
 # si va junto al nombre "pokoj" (en cualquier orden). Sin ese nombre, "ložnice s dvoulůžkovou
 # postelí" o "bojler 3l" darían falsos positivos.
 _BEDS = r"(?:[2-4]-?\s*l(?:uzk\w*)?|(?:dvou|dvoj|tri|troj)\s*luzk\w*)"
+# Habitación (checo "pokoj", eslovaco "izba"). Con "luzk" cuenta también el eslovaco "lôžko" (norm: "lozko").
+_ROOM = r"\b(?:pokoj|izb)\w*"
+# "pro 2 osoby" solo cuenta pegado a la habitación: "byt pro 2 osoby" o "vhodný pro 2 osoby" son del piso entero.
+_FOR_PEOPLE = r"(?:pro|pre)\s+[2-4]\s*(?:os|osob|osoby|lidi)\b"
 _SHARED_BEDROOM = re.compile(
     rf"\b{_BEDS}\s+pokoj"
     rf"|\bpokoj\w*\s+(?:je\s+)?{_BEDS}\b"
+    # Una cama en una habitación: "lůžko v pokoji", "1lužko Holka v pokoji". El hueco no admite "a" ni signos de
+    # puntuación para no leer "lůžko a skříň v pokoji" (mobiliario de una habitación propia). "lůžkoviny" no pasa por el \b.
+    r"|(?<![a-z])l[uo]zk[oa]\b(?:\s+(?!a\s)[a-z0-9]+){0,2}\s+ve?\s+(?:[a-z]+\s+)?(?:pokoj|izb)"
+    # "místo v pokoji" solo con numeral, "volné" o verbo de oferta: "dost místa v pokoji" describe una habitación propia.
+    r"|(?:\b(?:volne|volna|jedno|nabizi\w*)\s+|\b[1-4]\s*)mist[oa]\s+ve?\s+(?:[a-z]+\s+)?(?:pokoj|izb)"
+    # Habitación para 2-4 personas. Con hueco solo tras "vybaven/zařízen/vhodný/určen": un hueco libre leería
+    # "pokoj v bytě pro 2 osoby" y cruzaría frases ("Pokoj je světlý. Vhodné pro 2 osoby" lleva un punto).
+    rf"|{_ROOM}\s+(?:je\s+)?{_FOR_PEOPLE}"
+    rf"|{_ROOM}\s+(?:je\s+)?(?:\w+\s+)?(?:vybaven|zarizen|vhodn|urcen)\w*\s+(?:\w+\s+){{0,2}}{_FOR_PEOPLE}"
+    # "pokoje s 2 lůžkami", "pokoj se 2 lůžky"
+    rf"|{_ROOM}\s+se?\s+(?:[2-4]|dvema|trema|ctyrmi)\s*l[uo]zk\w*"
     r"|\bshared room"
 )
 

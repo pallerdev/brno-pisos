@@ -4,6 +4,8 @@ from __future__ import annotations
 import dataclasses
 import json
 import sys
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
@@ -12,6 +14,7 @@ import httpx
 from pisobot.parse_text import TextFacts
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+RETRY_DELAY_503 = 2
 
 PROMPT = """Lees anuncios de alquiler de Brno escritos en checo o inglés.
 Responde solo con JSON:
@@ -82,7 +85,8 @@ def _to_result(data) -> LlmResult | None:
 
 
 class Gemini:
-    def __init__(self, http: httpx.Client, api_key: str, model: str, daily_limit: int, usage: dict, today: date):
+    def __init__(self, http: httpx.Client, api_key: str, model: str, daily_limit: int, usage: dict, today: date,
+                 sleep: Callable[[float], None] = time.sleep):
         self.http = http
         self.api_key = api_key
         self.model = model
@@ -91,6 +95,7 @@ class Gemini:
         self.today = today.isoformat()
         # Tras el primer fallo no se vuelve a llamar en esta ejecución: una API caída o una clave mala se repetiría en cada anuncio
         self.failed = False
+        self.sleep = sleep
 
     def available(self) -> bool:
         if self.failed or not self.api_key:
@@ -103,17 +108,16 @@ class Gemini:
             return None
         if self.usage.get("date") != self.today:
             self.usage["date"], self.usage["count"] = self.today, 0
-        # Se cuenta antes de llamar: un intento fallido también gasta cuota
-        self.usage["count"] = self.usage.get("count", 0) + 1
         body = {
             "contents": [{"parts": [{"text": PROMPT + text[:6000]}]}],
             "generationConfig": {"responseMimeType": "application/json", "responseSchema": SCHEMA, "temperature": 0},
         }
         try:
-            response = self.http.post(
-                GEMINI_URL.format(model=self.model), headers={"x-goog-api-key": self.api_key}, json=body,
-                timeout=30, follow_redirects=False,
-            )
+            response = self._post(body)
+            if response.status_code == 503:
+                # 503 = Gemini sobrecargado, suele durar segundos: un único reintento. Cualquier otro fallo desactiva la IA
+                self.sleep(RETRY_DELAY_503)
+                response = self._post(body)
             response.raise_for_status()
             raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]
             data = json.loads(raw)
@@ -125,6 +129,14 @@ class Gemini:
         if result is None:
             return self._fail("respuesta no válida")
         return result
+
+    def _post(self, body: dict) -> httpx.Response:
+        # Se cuenta antes de llamar: un intento fallido (y el reintento) también gasta cuota
+        self.usage["count"] = self.usage.get("count", 0) + 1
+        return self.http.post(
+            GEMINI_URL.format(model=self.model), headers={"x-goog-api-key": self.api_key}, json=body,
+            timeout=30, follow_redirects=False,
+        )
 
     def _fail(self, reason: str) -> None:
         # Solo código de estado o nombre de excepción: nunca clave, URL ni cuerpo de respuesta (los logs de Actions son públicos)

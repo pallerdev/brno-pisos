@@ -175,6 +175,89 @@ def test_shared_bedroom_fix_round(text, expected):
     assert parse_text(text).shared_bedroom is expected
 
 
+# Textos reales del dry-run del 2026-11-25 (UlovDomov "Spolubydlení"): una cama en habitación compartida
+# que se colaba como ✅. Cada uno se prueba entero y por fragmentos: cualquiera de las frases debe bastar.
+REAL_BED_IN_SHARED_ROOM = [
+    "Nabízíme Vám k podnájmu (ke sdílenému bydlení) lůžko v pokoji, ve sdíleném bytě o dispozici 3+1",
+    "Pronájem bytu 6+1 ... Každý pokoj je vybaven nábytkem pro 2 osoby. Stůl, židle, postel, skříň.",
+    "Ponúkame k prenájmu 1lužko Holka v pokoji pre 2 os. v byte 2+1 ... Celkom sú v byte 2 pokoje s 2 lůžkami.",
+]
+
+
+@pytest.mark.parametrize("text", REAL_BED_IN_SHARED_ROOM)
+def test_shared_bedroom_real_dryrun_texts(text):
+    assert parse_text(text).shared_bedroom is True
+
+
+@pytest.mark.parametrize("text,expected", [
+    # una cama ofrecida dentro de una habitación
+    ("lůžko v pokoji", True),
+    ("Nabízíme lůžko v pokoji, ve sdíleném bytě", True),
+    ("1 lůžko v pokoji", True),
+    ("1lůžko v pokoji", True),
+    ("jedno lůžko v pokoji", True),
+    ("lůžka v pokoji", True),
+    ("1lužko Holka v pokoji", True),
+    ("lůžko ve sdíleném pokoji", True),
+    ("lôžko v izbe", True),
+    ("Ponúkame lôžko v izbe pre 2 osoby", True),
+    ("Lůžko\nv pokoji", True),
+    ("volné místo v pokoji", True),
+    ("Nabízím místo v pokoji", True),
+    ("1 místo v pokoji", True),
+    ("2 místa v pokoji", True),
+    # habitación para 2-4 personas
+    ("pokoj pro 2 osoby", True),
+    ("Pokoj je pro 2 osoby", True),
+    ("pokoje pro 3 osoby", True),
+    ("pokoj pro 4 osoby", True),
+    ("pokoji pre 2 os.", True),
+    ("izba pre 2 osoby", True),
+    ("izba s 2 lôžkami", True),
+    ("pokoj pro 2 os", True),
+    ("pokoj pro 2 lidi", True),
+    ("Každý pokoj je vybaven nábytkem pro 2 osoby", True),
+    ("pokoj je plně vybaven nábytkem pro 2 osoby", True),
+    ("každý pokoj vybaven pro 2 osoby", True),
+    ("pokoj zařízen pro 2 osoby", True),
+    ("pokoj vhodný pro 2 osoby", True),
+    ("pokoj\nje vybaven\nnábytkem pro 2 osoby", True),
+    # habitación con 2-4 camas
+    ("pokoje s 2 lůžkami", True),
+    ("pokoj se 2 lůžky", True),
+    ("pokoj s 3 lůžky", True),
+    ("pokoj se dvěma lůžky", True),
+    ("v bytě 2 pokoje s 2 lůžkami", True),
+    ("dvoulůžkový pokoj", True),
+    # piso entero, ropa de cama o habitación privada: no es cama compartida
+    ("byt pro 2 osoby", False),
+    ("Byt je vhodný pro 2 osoby", False),
+    ("vhodný pro 2 osoby", False),
+    ("Byt 2+kk, obývací pokoj a ložnice, vhodný pro 2 osoby", False),
+    ("pokoj v bytě pro 2 osoby", False),
+    ("Pokoj 14 m2, byt vhodný pro 2 osoby", False),
+    ("Každý pokoj je vybaven nábytkem. Byt pro 2 osoby", False),
+    ("Pokoj je světlý. Vhodné pro 2 osoby", False),
+    ("pokoj pro 1 osobu", False),
+    ("pokoj pro 5 osob", False),
+    ("postel 140x200", False),
+    ("manželská postel", False),
+    ("pokoj s dvoulůžkovou postelí", False),
+    ("lůžkoviny", False),
+    ("Lůžkoviny v pokoji", False),
+    ("povlečení a lůžkoviny v ceně", False),
+    ("povlečení", False),
+    ("jednolůžkový pokoj", False),
+    ("samostatný pokoj", False),
+    ("Samostatný pokoj, lůžko a skříň v pokoji", False),
+    ("pokoj má jedno lůžko, skříň a stůl", False),
+    ("pokoj s jedním lůžkem", False),
+    ("dost místa v pokoji pro psací stůl", False),
+])
+def test_shared_bedroom_dryrun_round(text, expected):
+    assert parse_text(text).shared_bedroom is expected
+
+
 @pytest.mark.parametrize("text,expected", [
     ("pokoje nejsou průchozí", False),
     ("bez průchozích pokojů", False),

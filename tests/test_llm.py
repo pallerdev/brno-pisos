@@ -2,6 +2,7 @@ import json
 from datetime import date
 
 import httpx
+import pytest
 
 from pisobot.llm import Gemini, LlmResult, merge_facts
 from pisobot.parse_text import TextFacts
@@ -17,9 +18,11 @@ def gemini_response(payload: dict) -> httpx.Response:
     return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": json.dumps(payload)}]}}]})
 
 
-def make(handler, usage, limit=5, key="k"):
+def make(handler, usage, limit=5, key="k", sleeps=None):
     http = httpx.Client(transport=httpx.MockTransport(handler))
-    return Gemini(http, key, "gemini-2.5-flash", limit, usage, date(2026, 11, 24))
+    # Nunca duerme de verdad: las esperas se anotan en `sleeps`
+    sleep = (sleeps if sleeps is not None else []).append
+    return Gemini(http, key, "gemini-2.5-flash", limit, usage, date(2026, 11, 24), sleep=sleep)
 
 
 def test_analyze_parses_json_and_counts_usage():
@@ -89,6 +92,90 @@ def test_first_failure_disables_gemini_for_the_run():
     assert gemini.analyze("x") is None
     assert gemini.analyze("y") is None
     assert len(calls) == 1
+
+
+def test_single_503_is_retried_once_after_two_seconds():
+    calls, sleeps = [], []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(503) if len(calls) == 1 else gemini_response(ANSWER)
+
+    usage = {"date": "2026-11-24", "count": 0}
+    gemini = make(handler, usage, sleeps=sleeps)
+    assert gemini.analyze("x") == LlmResult(**ANSWER)
+    assert len(calls) == 2
+    assert sleeps == [2]
+    assert calls[1].content == calls[0].content
+    # Cada petición que sale cuenta para el tope diario, también la repetida
+    assert usage["count"] == 2
+    # La IA sigue disponible para el resto de la ejecución
+    assert gemini.failed is False
+    assert gemini.analyze("y") == LlmResult(**ANSWER)
+    assert len(calls) == 3
+
+
+def test_second_503_disables_gemini_after_a_single_retry(capsys):
+    calls, sleeps = [], []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(503, text="clave-secreta overloaded")
+
+    gemini = make(handler, {"date": None, "count": 0}, key="clave-secreta", sleeps=sleeps)
+    assert gemini.analyze("x") is None
+    assert len(calls) == 2
+    assert sleeps == [2]
+    assert gemini.failed is True
+    assert gemini.analyze("y") is None
+    assert len(calls) == 2
+    err = capsys.readouterr().err
+    assert err == "gemini: HTTP 503\n"
+    assert "clave-secreta" not in err
+
+
+@pytest.mark.parametrize("status", [400, 403, 429, 500, 502, 504])
+def test_only_503_is_retried(status):
+    calls, sleeps = [], []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(status)
+
+    gemini = make(handler, {"date": None, "count": 0}, sleeps=sleeps)
+    assert gemini.analyze("x") is None
+    assert len(calls) == 1
+    assert sleeps == []
+    assert gemini.failed is True
+
+
+def test_timeout_is_not_retried():
+    calls, sleeps = [], []
+
+    def handler(request):
+        calls.append(request)
+        raise httpx.ReadTimeout("timed out")
+
+    gemini = make(handler, {"date": None, "count": 0}, sleeps=sleeps)
+    assert gemini.analyze("x") is None
+    assert len(calls) == 1
+    assert sleeps == []
+    assert gemini.failed is True
+
+
+def test_failure_after_the_retry_reports_the_last_status(capsys):
+    statuses = iter([503, 500])
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(next(statuses))
+
+    gemini = make(handler, {"date": None, "count": 0})
+    assert gemini.analyze("x") is None
+    assert len(calls) == 2
+    assert capsys.readouterr().err == "gemini: HTTP 500\n"
+    assert gemini.failed is True
 
 
 def test_failure_prints_one_line_without_secrets(capsys):
