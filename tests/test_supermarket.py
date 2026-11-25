@@ -133,6 +133,12 @@ def test_load_or_refresh_without_file_and_failing_service(tmp_path):
     assert not path.exists()
 
 
+def test_overpass_failure_leaves_one_log_line(tmp_path, capsys):
+    load_or_refresh(tmp_path / "a.json", fixed_client(lambda: httpx.Response(429)), BBOX, 7, TODAY)
+    load_or_refresh(tmp_path / "b.json", fixed_client(lambda: httpx.Response(200, text="<html>")), BBOX, 7, TODAY)
+    assert capsys.readouterr().err == "overpass: HTTP 429\noverpass: JSONDecodeError\n"
+
+
 def test_failing_service_is_asked_once_per_day(tmp_path):
     path = tmp_path / "supermarkets.json"
     write_old_file(path)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -58,7 +59,10 @@ def load_or_refresh(path: Path, http: httpx.Client, bbox: list[float], refresh_d
         return stored["shops"]
     try:
         shops = fetch_supermarkets(http, bbox)
-    except (httpx.HTTPError, ValueError):
+    except (httpx.HTTPError, ValueError) as exc:
+        # Sin esta línea un fallo de Overpass en Actions no deja rastro en el log
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        print(f"overpass: {f'HTTP {status}' if status else type(exc).__name__}", file=sys.stderr)
         # Overpass falla a veces: mejor datos de hace unas semanas que ninguno
         if stored is None:
             return []
