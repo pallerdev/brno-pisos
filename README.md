@@ -2,7 +2,7 @@
 
 Bot que vigila portales de alquiler de Brno y avisa en Discord cuando un anuncio encaja con los perfiles `yo` y `grupo`. GitHub Actions programa una búsqueda cada 15 minutos. Los anuncios que requieren aclaraciones se reúnen en un resumen diario a partir de las 19:00, hora de Praga.
 
-Lee Bezrealitky, UlovDomov, eSpolubydleni, iDNES y Bazoš. Para revisar un anuncio a mano, pega su texto o un enlace HTTPS de uno de esos portales o de Sreality en `#revisar`. [Diseño del bot](docs/superpowers/specs/2026-11-24-brno-pisos-design.md).
+Lee Bezrealitky, UlovDomov, eSpolubydleni, iDNES, Bazoš y Permanentia (agencia RE/MAX de Brno). Para revisar un anuncio a mano, pega su texto o un enlace HTTPS de uno de esos portales o de Sreality en `#revisar`. [Diseño del bot](docs/superpowers/specs/2026-11-24-brno-pisos-design.md).
 
 ## Uso local
 

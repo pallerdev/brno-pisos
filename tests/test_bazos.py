@@ -142,12 +142,12 @@ def test_detail_location_without_a_postcode_has_no_address():
 def test_build_collectors():
     cfg = load_config(ROOT / "config.yaml", env={"WORK_LATLON": "49.18,16.60"})
     names = [c.name for c in build_collectors(None, cfg)]
-    assert names == ["bezrealitky", "ulovdomov", "espolubydleni", "idnes", "bazos"]
+    assert names == ["bezrealitky", "ulovdomov", "espolubydleni", "idnes", "bazos", "permanentia"]
 
 
 def test_build_collectors_passes_the_postcode_prefixes_to_bazos():
     cfg = load_config(ROOT / "config.yaml", env={"WORK_LATLON": "49.18,16.60"})
-    bazos = build_collectors(None, cfg)[-1]
+    bazos = next(c for c in build_collectors(None, cfg) if c.name == "bazos")
     assert bazos.psc_prefixes == BRNO
 
 

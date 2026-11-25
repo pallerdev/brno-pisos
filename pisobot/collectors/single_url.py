@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from pisobot.collectors import bazos, bezrealitky, espolubydleni, idnes
+from pisobot.collectors import bazos, bezrealitky, espolubydleni, idnes, permanentia
 from pisobot.collectors.base import HTMLParser, block_text, price_czk
 from pisobot.models import Kind, Listing
 from pisobot.parse_text import norm, normalize_disposition
@@ -29,6 +29,7 @@ _CITY_LEVEL = {"city", "municipality", "region", "country"}
 # El encabezado de las listas estructuradas no puede disparar ninguna regla (con "Vybavení" daría furnished=True)
 _PARAMS_LABEL = "Parametry inzerátu:"
 _ESPOLUBYDLENI_AD = re.compile(r"/\d+-[^/]*\.htm")
+_PERMANENTIA_AD = re.compile(r"^/reality/[^/]+-\d+/?$")
 _PAGE_TEXT_LIMIT = 8000
 # Fallos de estructura de un parser (JSON roto, clave ausente, nodo nulo); un fallo de red no entra aquí
 _PARSE_ERRORS = (ValueError, KeyError, IndexError, TypeError, AttributeError)
@@ -37,6 +38,7 @@ _REVIEW_HOSTS = frozenset({
     "www.ulovdomov.cz", "ulovdomov.cz",
     "www.espolubydleni.cz", "espolubydleni.cz",
     "reality.idnes.cz", "reality.bazos.cz",
+    "www.permanentia.cz", "permanentia.cz",
     "www.sreality.cz", "sreality.cz",
 })
 
@@ -221,6 +223,7 @@ def _is_ad_url(host: str, path: str) -> bool:
         or (_on(host, "reality.idnes.cz") and "/detail/" in path)
         or (_on(host, "reality.bazos.cz") and "/inzerat/" in path)
         or (_on(host, "espolubydleni.cz") and _ESPOLUBYDLENI_AD.search(path) is not None)
+        or (_on(host, "permanentia.cz") and _PERMANENTIA_AD.match(path) is not None)
     )
 
 
@@ -232,6 +235,8 @@ def _parse_ad(html: str, host: str, url: str) -> Listing | None:
         return idnes.parse_detail(html, url=url)
     if _on(host, "reality.bazos.cz"):
         return bazos.parse_detail(html, url=url)
+    if _on(host, "permanentia.cz"):
+        return permanentia.parse_detail(html, url=url)
     return espolubydleni.parse_detail(html, url)
 
 

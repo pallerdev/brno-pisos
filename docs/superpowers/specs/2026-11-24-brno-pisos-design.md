@@ -95,6 +95,7 @@ brno-pisos/
       espolubydleni.py
       idnes.py
       bazos.py
+      permanentia.py
       single_url.py           una URL pegada en #revisar (incluye Sreality)
     enrich/
       geocode.py              Nominatim
@@ -131,6 +132,7 @@ Se respeta `robots.txt` de cada portal.
 | eSpolubydleni | HTML `/podnajem-spolubydlici/brno` | `Crawl-delay: 10` respetado. Mezcla ofertas y búsquedas: solo "Nabízím". Sin GPS: geocodificar calle |
 | iDNES | HTML `/s/pronajem/byty/.../brno/` y `/s/pronajem/byty/pokoj/brno/` | Solo rutas simples (robots bloquea combinaciones de filtros). GPS en detalle |
 | Bazoš | HTML de la categoría nacional sin filtros + filtro local por PSČ de Brno | El filtro de localidad en URL está prohibido por robots. Ubicación solo por PSČ |
+| Permanentia | HTML `/pronajem/byty/jihomoravsky/?idMesta[0]=582786` (agencia RE/MAX de Brno) | Sin `Crawl-delay`. Robots veta ordenar y filtrar por precio o superficie (`podle`, `cena_*`, `plocha_*`, `pocet`): solo vale el filtro de ciudad. Puede quedarse en 0 anuncios sin que sea un fallo. GPS en detalle |
 | Sreality | Solo vía `#revisar` (una URL pegada por el usuario) | Robots `Disallow: /`. El usuario usa la alerta oficial "Hlídací pes" |
 
 Fuera de alcance: RealityMIX, Reality.cz (duplican agencias, poco volumen).

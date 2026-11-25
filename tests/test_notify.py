@@ -48,6 +48,12 @@ def test_pass_embed_for_yo(cfg):
     assert "📅 Libre desde 01.02.2027 · Fianza 14.000" in lines
 
 
+def test_embed_names_the_permanentia_source(cfg):
+    c = candidate(source="permanentia", kind=Kind.FLAT, rent=9500, fees=2500)
+    embed = build_embed(c, evaluate(c, "yo", cfg), cfg)
+    assert embed["description"].splitlines()[0] == "🏠 Piso entero · Permanentia · sin comisión"
+
+
 def test_group_embed_shows_price_per_person(cfg):
     c = candidate(kind=Kind.FLAT, rent=37000, fees=3000, fees_include_energy=True, disposition="4+1", area_m2=95)
     embed = build_embed(c, evaluate(c, "grupo", cfg), cfg)

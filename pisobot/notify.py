@@ -19,7 +19,7 @@ COLOR = {Verdict.PASS: 0x2ECC71, Verdict.MAYBE: 0xF1C40F, Verdict.FAIL: 0xE74C3C
 KIND = {Kind.ROOM: "Habitación", Kind.FLAT: "Piso entero"}
 SOURCES = {
     "bezrealitky": "Bezrealitky", "ulovdomov": "UlovDomov", "espolubydleni": "eSpolubydleni",
-    "idnes": "iDNES", "bazos": "Bazoš", "sreality": "Sreality", "texto": "texto pegado",
+    "idnes": "iDNES", "bazos": "Bazoš", "permanentia": "Permanentia", "sreality": "Sreality", "texto": "texto pegado",
 }
 MODES = {"TRAM": "tranvía", "BUS": "bus", "TROLLEYBUS": "trolebús", "RAIL": "tren", "REGIONAL_RAIL": "tren"}
 FOOTER = "Rutas: Transitous (transitous.org)"  # atribución que exige su política de uso

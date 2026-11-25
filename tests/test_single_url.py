@@ -23,6 +23,8 @@ BEZREALITKY_URL = "https://www.bezrealitky.cz/nemovitosti-byty-domy/1092907-nabi
 ESPOLUBYDLENI_URL = (
     "https://www.espolubydleni.cz/podnajem-spolubydlici/554939-pronajem-panelovy-byt-2-1-kralovo-pole-brno.htm"
 )
+PERMANENTIA_URL = "https://www.permanentia.cz/reality/pronajem-bytu-1-kk-v-brne-na-ulici-bayerova-453121/"
+PERMANENTIA_LIST_URL = "https://www.permanentia.cz/pronajem/byty/jihomoravsky/?idMesta%5B0%5D=582786"
 _MISSING = object()
 
 
@@ -279,6 +281,7 @@ ROUTES = {
     BAZOS_URL: ("html", "bazos_detail.html"),
     BEZREALITKY_URL: ("html", "bezrealitky_detail.html"),
     ESPOLUBYDLENI_URL: ("html", "espolubydleni_detail.html"),
+    PERMANENTIA_URL: ("html", "permanentia_detail.html"),
     "https://example.com/inzerat": ("text", "<html><body><p>Pronajmu pokoj, 7000 Kč</p></body></html>"),
 }
 
@@ -306,10 +309,18 @@ def _serving(body, status=200):
     (BAZOS_URL, "bazos"),
     (BEZREALITKY_URL, "bezrealitky"),
     (ESPOLUBYDLENI_URL, "espolubydleni"),
+    (PERMANENTIA_URL, "permanentia"),
 ])
 def test_fetch_known_portals(url, source):
     result = fetch(_client(router), url)
     assert result.source == source and result.rent
+
+
+def test_fetch_permanentia_returns_its_listing():
+    result = fetch(_client(router), PERMANENTIA_URL)
+    assert isinstance(result, Listing)
+    assert (result.source_id, result.rent, result.fees, result.deposit) == ("453121", 9500, 2500, 19000)
+    assert (result.lat, result.lon, result.location_precision) == (49.2078094, 16.6016636, "exact")
 
 
 def test_fetch_unknown_returns_page_text():
@@ -395,6 +406,7 @@ _NEXT = '<script id="__NEXT_DATA__" type="application/json">{}</script>'
     (BEZREALITKY_URL, _NEXT.replace("{}", '{"props": {"pageProps": {}}}') + "<p>retirado</p>"),
     (BEZREALITKY_URL, _NEXT.replace("{}", '{"props": {"pageProps": {"origAdvert": null}}}') + "<p>retirado</p>"),
     (ESPOLUBYDLENI_URL, "<html><head><title>Nabízím pokoj</title></head><body><p>retirado</p></body></html>"),
+    (PERMANENTIA_URL, "<html><body><p>retirado</p></body></html>"),
 ])
 def test_fetch_parser_failure_falls_back_to_page_text(url, html):
     assert fetch(_serving(html), url) == "retirado"
@@ -408,10 +420,15 @@ def test_fetch_parser_failure_falls_back_to_page_text(url, html):
     ("https://bezrealitky.cz.example.com/nemovitosti-byty-domy/1092907-x", "bezrealitky_detail.html"),
     ("https://espolubydleni.cz.example.com/podnajem/554939-x.htm", "espolubydleni_detail.html"),
     ("https://example.com/podnajem/554939-x.htm?from=espolubydleni.cz", "espolubydleni_detail.html"),
+    ("https://permanentia.cz.example.com/reality/x-453121/", "permanentia_detail.html"),
+    ("https://example.com/reality/x-453121/?from=permanentia.cz", "permanentia_detail.html"),
     # Páginas del portal que no son un anuncio
     ("https://reality.idnes.cz/s/pronajem/byty/brno/", "idnes_detail.html"),
     ("https://reality.bazos.cz/pronajmu/byt/", "bazos_detail.html"),
     ("https://www.bezrealitky.cz/vypis/nabidka-pronajem/byt/brno", "bezrealitky_detail.html"),
+    (PERMANENTIA_LIST_URL, "permanentia_detail.html"),
+    ("https://www.permanentia.cz/reality/byty/", "permanentia_detail.html"),
+    ("https://www.permanentia.cz/reality/vse/", "permanentia_detail.html"),
 ])
 def test_fetch_only_parses_real_ad_urls_of_each_portal(url, fixture):
     html = (FIXTURES / fixture).read_text(encoding="utf-8")
@@ -440,6 +457,8 @@ def _redirecting(target, listing_html):
     (BAZOS_URL, "https://reality.bazos.cz/pronajmu/byt/", "bazos_list.html"),
     (BEZREALITKY_URL, "https://www.bezrealitky.cz/vypis/nabidka-pronajem/byt/brno", "bezrealitky_list.html"),
     (ESPOLUBYDLENI_URL, "https://www.espolubydleni.cz/podnajem-spolubydlici/brno", "espolubydleni_list.html"),
+    (PERMANENTIA_URL, PERMANENTIA_LIST_URL, "permanentia_list.html"),
+    (PERMANENTIA_URL, "https://www.permanentia.cz/", "permanentia_list.html"),
 ])
 def test_fetch_removed_ad_redirected_to_a_list_returns_nothing(url, target, fixture):
     html = (FIXTURES / fixture).read_text(encoding="utf-8")
@@ -513,6 +532,12 @@ def _counting(handler):
     "https://reality.idnes.cz:8443/detail/1",
     "https://user:pass@reality.idnes.cz/detail/1",
     "https://reality.idnes.cz@example.com/detail/1",
+    "https://permanentia.cz.example.com/reality/x-453121/",
+    "https://sub.permanentia.cz/reality/x-453121/",
+    "https://www.permanentia.cz:8443/reality/x-453121/",
+    "http://www.permanentia.cz/reality/x-453121/",
+    "https://user:pass@www.permanentia.cz/reality/x-453121/",
+    "https://www.permanentia.cz@example.com/reality/x-453121/",
     "https://169.254.169.254/latest/meta-data/",
     "ftp://reality.idnes.cz/detail/1",
     "reality.idnes.cz/detail/1",
@@ -537,6 +562,40 @@ def test_review_redirect_to_a_forbidden_target_is_rejected_after_one_request(tar
     with pytest.raises(UnsupportedReviewURL):
         fetch_review_url(client, IDNES_URL)
     assert [str(request.url) for request in requests] == [IDNES_URL]
+
+
+@pytest.mark.parametrize("target", [
+    "https://example.com/reality/x-453121/",
+    "https://sub.permanentia.cz/reality/x-453121/",
+    "https://www.permanentia.cz:8443/reality/x-453121/",
+    "http://www.permanentia.cz/reality/x-453121/",
+    "https://169.254.169.254/latest/meta-data/",
+])
+def test_review_redirect_away_from_permanentia_is_rejected_after_one_request(target):
+    client, requests = _counting(lambda request: httpx.Response(302, headers={"Location": target}))
+    with pytest.raises(UnsupportedReviewURL):
+        fetch_review_url(client, PERMANENTIA_URL)
+    assert [str(request.url) for request in requests] == [PERMANENTIA_URL]
+
+
+@pytest.mark.parametrize("url", [
+    PERMANENTIA_URL,
+    "https://permanentia.cz/reality/pronajem-bytu-1-kk-v-brne-na-ulici-bayerova-453121/",
+])
+def test_review_permanentia_with_or_without_www_is_parsed(url):
+    # El portal redirige el dominio sin www al canónico: los dos dominios están permitidos
+    html = (FIXTURES / "permanentia_detail.html").read_text(encoding="utf-8")
+
+    def handler(request):
+        if request.url.host == "permanentia.cz":
+            return httpx.Response(301, headers={"Location": PERMANENTIA_URL})
+        return httpx.Response(200, text=html)
+
+    client, requests = _counting(handler)
+    result = fetch_review_url(client, url)
+    assert isinstance(result, Listing) and result.source == "permanentia"
+    assert result.url == PERMANENTIA_URL
+    assert {request.url.host for request in requests} <= {"permanentia.cz", "www.permanentia.cz"}
 
 
 def test_review_relative_redirect_to_a_list_page_returns_nothing():
