@@ -19,7 +19,8 @@ from pisobot.collectors.base import HTMLParser, block_text, price_czk
 from pisobot.models import Kind, Listing
 from pisobot.parse_text import norm, normalize_disposition
 
-SREALITY_ID = re.compile(r"sreality\.cz/detail/(?:[^/?#]+/){4}(\d+)")
+# Se aplica a la ruta de la URL: un texto parecido en la consulta no debe disparar una petición al API
+SREALITY_ID = re.compile(r"^/detail/(?:[^/]+/){4}(\d+)/?$")
 SREALITY_API = "https://www.sreality.cz/api/v1/estates/{id}"
 # Hasta dónde llega la precisión del punto: solo la dirección completa es exacta y lo desconocido no se da por bueno
 _PRECISION = {"address": "exact", "street": "street"}
@@ -200,7 +201,7 @@ def _on(host: str, domain: str) -> bool:
 
 
 def _fetch_sreality(http: httpx.Client, url: str) -> Listing | str:
-    match = SREALITY_ID.search(url)
+    match = SREALITY_ID.match(urlparse(url).path)
     if match is None:
         # Sin id de anuncio no hay API que consultar, y pedir su HTML sería rastrear la web
         return ""

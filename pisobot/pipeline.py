@@ -4,10 +4,11 @@ from __future__ import annotations
 import dataclasses
 import re
 import sys
+import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -21,10 +22,17 @@ from pisobot.models import Kind, Listing, Shop, Verdict
 from pisobot.notify import build_embed, chunk_embeds
 from pisobot.parse_text import TextFacts, norm, normalize_disposition, parse_area, parse_price, parse_text
 from pisobot.profiles import Candidate, evaluate, prefilter
-from pisobot.review import split_url
+from pisobot.review import ReplyRejected, split_url
 from pisobot.store import Store, fingerprint
 
 TRANSIT_ATTEMPTS = 3
+# El job de Actions se corta a los 8 min: se deja margen para guardar el estado y publicarlo
+DEFAULT_BUDGET_S = 420
+# Fallos transitorios seguidos con el mismo mensaje de #revisar antes de darlo por perdido
+REVIEW_ATTEMPTS = 3
+# En la primera lectura de #revisar solo se contesta lo reciente: el historial viejo ya no interesa
+REVIEW_FIRST_RUN_WINDOW = timedelta(hours=24)
+_DISCORD_EPOCH_MS = 1420070400000
 _ROOM_WORDS = re.compile(r"(?<![\w-])(?<!\d )pokoj\b|spolubydl|\broom\b|\bhabitacion\b")
 
 
@@ -46,30 +54,71 @@ def _log(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
-def run(cfg: Config, store: Store, deps: Deps, now: datetime) -> dict:
+class _Budget:
+    """Tiempo máximo de una ejecución; al agotarse no se empieza trabajo nuevo, pero se guarda lo hecho."""
+
+    def __init__(self, seconds: float, clock: Callable[[], float]):
+        self.seconds, self.clock = seconds, clock
+        self.started = clock()
+        self.hit = False
+
+    def exceeded(self) -> bool:
+        if self.clock() - self.started < self.seconds:
+            return False
+        if not self.hit:
+            self.hit = True
+            _log(f"presupuesto de {self.seconds:g} s agotado: se guarda y el resto queda para la próxima ejecución")
+        return True
+
+
+def _guarded(step: str, action: Callable, *args) -> None:
+    """Un paso que falla no debe saltarse los demás ni el guardado del estado."""
+    try:
+        action(*args)
+    except Exception as exc:  # noqa: BLE001
+        _log(f"{step}: fallo inesperado ({type(exc).__name__})")
+
+
+def run(cfg: Config, store: Store, deps: Deps, now: datetime, clock: Callable[[], float] = time.monotonic) -> dict:
     tz = cfg.raw["departure"]["tz"]
     today = now.astimezone(ZoneInfo(tz)).date()
     depart = next_weekday_departure(now, cfg.raw["departure"]["time"], tz)
+    budget = _Budget(cfg.raw.get("run", {}).get("budget_seconds", DEFAULT_BUDGET_S), clock)
     report: Counter[str] = Counter()
     for collector in deps.collectors:
-        try:
-            listings = collector.fetch_list()
-        except Exception as exc:  # noqa: BLE001 - un portal roto no debe parar a los demás
-            _collector_failed(cfg, store, deps, collector.name, exc)
-            report["portales_con_error"] += 1
-            continue
-        _collector_ok(cfg, store, deps, collector.name)
-        report[f"leidos_{collector.name}"] += len(listings)
-        for listing in listings:
-            try:
-                _process(listing, collector, cfg, store, deps, depart, today, report)
-            except Exception as exc:  # Un anuncio defectuoso no debe impedir guardar el resto.
-                _log(f"{collector.name}: anuncio no procesado ({type(exc).__name__})")
-                report["anuncios_con_error"] += 1
-    _review(cfg, store, deps, depart, report)
-    _digest(cfg, store, deps, now, report)
-    store.prune(today)
+        if budget.exceeded():
+            break
+        _portal(collector, cfg, store, deps, depart, today, report, budget)
+        # Cada portal deja guardado lo que ya se ha enviado: un corte posterior no repite avisos
+        store.save()
+    _guarded("revisar", _review, cfg, store, deps, depart, report, now, budget)
+    store.save()
+    _guarded("resumen", _digest, cfg, store, deps, now, report)
+    store.save()
+    _guarded("limpieza", store.prune, today)
+    if budget.hit:
+        report["presupuesto_agotado"] = 1
     return dict(report)
+
+
+def _portal(collector, cfg: Config, store: Store, deps: Deps, depart: datetime, today: date, report: Counter,
+            budget: _Budget) -> None:
+    try:
+        listings = collector.fetch_list()
+    except Exception as exc:  # noqa: BLE001 - un portal roto no debe parar a los demás
+        _collector_failed(cfg, store, deps, collector.name, exc)
+        report["portales_con_error"] += 1
+        return
+    _collector_ok(cfg, store, deps, collector.name)
+    report[f"leidos_{collector.name}"] += len(listings)
+    for listing in listings:
+        if budget.exceeded():
+            return
+        try:
+            _process(listing, collector, cfg, store, deps, depart, today, report)
+        except Exception as exc:  # Un anuncio defectuoso no debe impedir guardar el resto.
+            _log(f"{collector.name}: anuncio no procesado ({type(exc).__name__})")
+            report["anuncios_con_error"] += 1
 
 
 def _process(listing, collector, cfg, store, deps, depart, today: date, report: Counter) -> None:
@@ -222,6 +271,11 @@ def evaluate_pasted(content: str, message_id: str, cfg: Config, deps: Deps, depa
             if len(text) < 30:
                 return "No puedo abrir ese enlace. Pega el texto completo del anuncio.", []
             url, fetched = None, ""
+        except ValueError:
+            # El portal respondió, pero no con un anuncio legible (p. ej. Sreality sin JSON): sirve el texto pegado
+            if len(text) < 30:
+                return "No he podido leer el anuncio de ese enlace; pega el texto del anuncio.", []
+            fetched = ""
         except httpx.HTTPError as exc:
             return f"No he podido abrir el enlace ({type(exc).__name__}).", []
         if isinstance(fetched, Listing):
@@ -248,9 +302,10 @@ def evaluate_pasted(content: str, message_id: str, cfg: Config, deps: Deps, depa
     return note, embeds
 
 
-def _review(cfg: Config, store: Store, deps: Deps, depart: datetime, report: Counter) -> None:
+def _review(cfg: Config, store: Store, deps: Deps, depart: datetime, report: Counter, now: datetime,
+            budget: _Budget) -> None:
     channel = cfg.secrets.get("DISCORD_REVISAR_CHANNEL_ID")
-    if deps.discord is None or not channel:
+    if deps.discord is None or not channel or budget.exceeded():
         return
     try:
         messages = deps.discord.new_messages(channel, store.state["revisar_last_id"])
@@ -262,7 +317,10 @@ def _review(cfg: Config, store: Store, deps: Deps, depart: datetime, report: Cou
         geocoder=deps.review_geocoder if deps.review_geocoder is not None else deps.geocoder,
         transit=deps.review_transit if deps.review_transit is not None else deps.transit,
     )
+    first_run = store.state["revisar_last_id"] is None
     for message in messages:
+        if budget.exceeded():
+            break
         message_id = message["id"]
         content = message.get("content")
         author = message.get("author")
@@ -270,15 +328,38 @@ def _review(cfg: Config, store: Store, deps: Deps, depart: datetime, report: Cou
         if bot or message.get("webhook_id") or not isinstance(content, str) or not content.strip():
             store.state["revisar_last_id"] = message_id
             continue
+        if first_run and now - _sent_at(message_id) > REVIEW_FIRST_RUN_WINDOW:
+            store.state["revisar_last_id"] = message_id
+            continue
         try:
             note, embeds = evaluate_pasted(content.strip(), message_id, cfg, review_deps, depart)
         except Exception as exc:  # noqa: BLE001 - un mensaje raro no debe tumbar la ejecución
+            _log(f"revisar: {type(exc).__name__}")
             note, embeds = f"No he podido evaluarlo ({type(exc).__name__}).", []
-        if not deps.discord.reply(channel, message_id, note, embeds):
-            report["revisar_fallidos"] += 1
-            break
+        try:
+            delivered = deps.discord.reply(channel, message_id, note, embeds)
+        except ReplyRejected as exc:
+            # Reintentar daría el mismo error y bloquearía los mensajes de detrás
+            _log(f"revisar: HTTP {exc.status}")
+            report["revisar_omitidos"] += 1
+        else:
+            if delivered:
+                report["revisar_respondidos"] += 1
+            else:
+                report["revisar_fallidos"] += 1
+                failures = store.state["revisar_retries"].get(message_id, 0) + 1
+                if failures < REVIEW_ATTEMPTS:
+                    store.state["revisar_retries"] = {message_id: failures}
+                    break
+                _log(f"revisar: mensaje omitido tras {failures} fallos seguidos")
+                report["revisar_omitidos"] += 1
+        store.state["revisar_retries"] = {}
         store.state["revisar_last_id"] = message_id
-        report["revisar_respondidos"] += 1
+
+
+def _sent_at(message_id: str) -> datetime:
+    """Los ids de Discord (snowflakes) llevan la fecha de envío en los bits altos."""
+    return datetime.fromtimestamp(((int(message_id) >> 22) + _DISCORD_EPOCH_MS) / 1000, timezone.utc)
 
 
 def _digest(cfg: Config, store: Store, deps: Deps, now: datetime, report: Counter) -> None:

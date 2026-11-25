@@ -173,3 +173,52 @@ def test_client_caches_empty_result():
     assert client.trips(Point(49.2, 16.6), Point(49.19, 16.61), depart) == []
     assert client.trips(Point(49.2, 16.6), Point(49.19, 16.61), depart) == []
     assert len(calls) == 1 and len(cache) == 1
+
+
+def _origins(count):
+    return [Point(49.2 + i / 100, 16.6) for i in range(count)]
+
+
+def test_client_stops_calling_transitous_after_two_failures_in_a_row():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(503)
+
+    client = _client(handler, {})
+    depart = datetime(2026, 11, 25, 7, 0, tzinfo=timezone.utc)
+    assert [client.trips(origin, Point(49.19, 16.61), depart) for origin in _origins(4)] == [None] * 4
+    assert len(calls) == 2
+
+
+def test_client_failure_count_resets_after_a_success():
+    calls = []
+    statuses = iter([503, 200, 503, 503, 200])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        status = next(statuses)
+        return httpx.Response(status, json=PLAN) if status == 200 else httpx.Response(status)
+
+    client = _client(handler, {})
+    depart = datetime(2026, 11, 25, 7, 0, tzinfo=timezone.utc)
+    results = [client.trips(origin, Point(49.19, 16.61), depart) for origin in _origins(5)]
+    assert [result is None for result in results] == [True, False, True, True, True]
+    assert len(calls) == 4
+
+
+def test_client_open_breaker_still_serves_the_cache():
+    cache = {}
+    ok = True
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=PLAN) if ok else httpx.Response(503)
+
+    client = _client(handler, cache)
+    depart = datetime(2026, 11, 25, 7, 0, tzinfo=timezone.utc)
+    cached, *others = _origins(3)
+    assert client.trips(cached, Point(49.19, 16.61), depart)
+    ok = False
+    assert [client.trips(origin, Point(49.19, 16.61), depart) for origin in others] == [None, None]
+    assert client.trips(cached, Point(49.19, 16.61), depart)

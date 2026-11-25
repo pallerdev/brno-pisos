@@ -3,11 +3,14 @@ import dataclasses
 import json
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 import pytest
 
-from pisobot.collectors.single_url import SREALITY_API, SREALITY_ID, fetch, page_text, parse_sreality
+from pisobot.collectors.single_url import (
+    SREALITY_API, SREALITY_ID, UnsupportedReviewURL, fetch, fetch_review_url, page_text, parse_sreality,
+)
 from pisobot.models import Kind, Listing
 from pisobot.parse_text import parse_text
 
@@ -25,7 +28,8 @@ _MISSING = object()
 
 @pytest.mark.parametrize("url", [SR_URL, SR_URL + "?foo=1", SR_URL + "#x", SR_URL + "/"])
 def test_sreality_id(url):
-    assert SREALITY_ID.search(url).group(1) == "1704005708"
+    # El id se busca solo en la ruta: lo que haya en la consulta o el fragmento no cuenta
+    assert SREALITY_ID.match(urlparse(url).path).group(1) == "1704005708"
 
 
 def _sreality(**fields):
@@ -477,3 +481,87 @@ def test_page_text_is_capped():
 
 def test_page_text_of_an_empty_page():
     assert page_text("") == ""
+
+
+@pytest.mark.parametrize("url", [
+    "https://www.sreality.cz/hledani/pronajem/byty?ref=https://www.sreality.cz/detail/a/b/c/d/123",
+    "https://www.sreality.cz/hledani/pronajem/byty#/detail/a/b/c/d/123",
+    "https://www.sreality.cz/hledani?x=sreality.cz/detail/a/b/c/d/123",
+])
+def test_fetch_sreality_id_in_the_query_or_fragment_makes_no_request(url):
+    def handler(request):
+        raise AssertionError(f"no debe pedir nada: {request.url}")
+
+    assert fetch(_client(handler), url) == ""
+    assert fetch_review_url(_client(handler), url) == ""
+
+
+def _counting(handler):
+    requests = []
+
+    def record(request):
+        requests.append(request)
+        return handler(request)
+
+    return _client(record), requests
+
+
+@pytest.mark.parametrize("url", [
+    "http://reality.idnes.cz/detail/1",
+    "https://example.com/detail/1",
+    "https://reality.idnes.cz.example.com/detail/1",
+    "https://reality.idnes.cz:8443/detail/1",
+    "https://user:pass@reality.idnes.cz/detail/1",
+    "https://reality.idnes.cz@example.com/detail/1",
+    "https://169.254.169.254/latest/meta-data/",
+    "ftp://reality.idnes.cz/detail/1",
+    "reality.idnes.cz/detail/1",
+])
+def test_review_url_outside_the_allowed_portals_is_rejected_without_requests(url):
+    client, requests = _counting(lambda request: httpx.Response(200, text="hola"))
+    with pytest.raises(UnsupportedReviewURL):
+        fetch_review_url(client, url)
+    assert requests == []
+
+
+@pytest.mark.parametrize("target", [
+    "http://169.254.169.254/latest/meta-data/",
+    "https://169.254.169.254/latest/meta-data/",
+    "https://example.com/detail/1",
+    "https://reality.idnes.cz:8443/detail/1",
+    "http://reality.idnes.cz/detail/1",
+    "https://www.sreality.cz/detail/a/b/c/d/1",
+])
+def test_review_redirect_to_a_forbidden_target_is_rejected_after_one_request(target):
+    client, requests = _counting(lambda request: httpx.Response(302, headers={"Location": target}))
+    with pytest.raises(UnsupportedReviewURL):
+        fetch_review_url(client, IDNES_URL)
+    assert [str(request.url) for request in requests] == [IDNES_URL]
+
+
+def test_review_relative_redirect_to_a_list_page_returns_nothing():
+    html = (FIXTURES / "bazos_list.html").read_text(encoding="utf-8")
+
+    def handler(request):
+        if request.url.path == "/pronajmu/byt/":
+            return httpx.Response(200, text=html)
+        return httpx.Response(302, headers={"Location": "/pronajmu/byt/"})
+
+    client, requests = _counting(handler)
+    assert fetch_review_url(client, BAZOS_URL) == ""
+    assert [request.url.host for request in requests] == ["reality.bazos.cz"] * 2
+
+
+def test_review_redirect_loop_is_bounded():
+    client, requests = _counting(lambda request: httpx.Response(302, headers={"Location": "/otra"}))
+    with pytest.raises(httpx.TooManyRedirects):
+        fetch_review_url(client, IDNES_URL)
+    assert len(requests) == 6
+
+
+def test_review_url_happy_path_returns_the_listing_with_a_single_request():
+    html = (FIXTURES / "bezrealitky_detail.html").read_text(encoding="utf-8")
+    client, requests = _counting(lambda request: httpx.Response(200, text=html))
+    result = fetch_review_url(client, BEZREALITKY_URL)
+    assert isinstance(result, Listing) and result.source == "bezrealitky"
+    assert [str(request.url) for request in requests] == [BEZREALITKY_URL]

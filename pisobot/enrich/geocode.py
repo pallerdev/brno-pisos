@@ -1,4 +1,4 @@
-"""Geocodificación con Nominatim (OSM). Política: máximo 1 petición por segundo."""
+"""Geocodificación con Nominatim (OSM): espacia las peticiones `min_interval` segundos (su política pide al menos 1)."""
 from __future__ import annotations
 
 import time
@@ -11,11 +11,15 @@ import httpx
 from pisobot.models import Point
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+# Con Nominatim caído cada consulta cuesta su espera más un timeout: tras dos fallos seguidos se deja de llamar
+MAX_CONSECUTIVE_FAILURES = 2
 
 
 @dataclass
-class _RequestTiming:
+class _RequestState:
+    """Turno y salud del servidor: se comparte con las copias de with_cache, que hablan con el mismo Nominatim."""
     last: float | None = None
+    failures: int = 0
 
 
 class Geocoder:
@@ -28,7 +32,7 @@ class Geocoder:
         self.clock = clock
         self.min_interval = min_interval
         self.endpoint = endpoint
-        self._timing = _RequestTiming()
+        self._timing = _RequestState()
 
     def with_cache(self, cache: dict) -> Geocoder:
         """Separa el caché de un uso sin duplicar su turno de peticiones al servidor."""
@@ -41,6 +45,8 @@ class Geocoder:
         if key in self.cache:
             value = self.cache[key]
             return Point(*value) if value else None
+        if self._timing.failures >= MAX_CONSECUTIVE_FAILURES:
+            return None
         if self._timing.last is not None:
             wait = self.min_interval - (self.clock() - self._timing.last)
             if wait > 0:
@@ -54,11 +60,14 @@ class Geocoder:
             response.raise_for_status()
             results = response.json()
             if not results:
+                self._timing.failures = 0
                 self.cache[key] = None
                 return None
             point = Point(float(results[0]["lat"]), float(results[0]["lon"]))
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             # Un fallo de Nominatim no debe abortar la ejecución: no se cachea para reintentar luego
+            self._timing.failures += 1
             return None
+        self._timing.failures = 0
         self.cache[key] = [point.lat, point.lon]
         return point

@@ -121,3 +121,29 @@ def test_unexpected_errors_do_not_log_secret_values(local_project, monkeypatch, 
     err = capsys.readouterr().err
     assert "RuntimeError" in err
     assert WEBHOOK not in err
+
+
+def test_state_is_saved_even_when_the_run_is_interrupted(local_project, monkeypatch, capsys):
+    def run(cfg, store, deps, now):
+        store.state["last_digest"] = "2026-11-24"
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "make_client", lambda agent: httpx.Client(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={"elements": [{"lat": 49.2, "lon": 16.6}]}))))
+    monkeypatch.setattr(cli, "run", run)
+    assert cli.main([]) == 1
+    assert Store(local_project / "data").state["last_digest"] == "2026-11-24"
+    assert "RuntimeError" in capsys.readouterr().err
+
+
+def test_dry_run_never_writes_state_even_when_interrupted(local_project, monkeypatch):
+    def run(cfg, store, deps, now):
+        store.state["last_digest"] = "2026-11-24"
+        store.save()
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "make_client", lambda agent: httpx.Client(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={"elements": [{"lat": 49.2, "lon": 16.6}]}))))
+    monkeypatch.setattr(cli, "run", run)
+    assert cli.main(["--dry-run"]) == 1
+    assert not (local_project / "data" / "state.json").exists()

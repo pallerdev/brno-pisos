@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import re
+import sys
 import time
 from collections.abc import Callable
 
@@ -28,6 +29,8 @@ _DESCRIPTION_LIMIT = 2600  # Caben los dos perfiles de #revisar en el mismo mens
 _MAX_EMBEDS = 10
 _MAX_EMBED_CHARS = 6000
 _MAX_RETRY_DELAY = 10
+# El secreto del webhook lo pone quien configura el repo: no debe poder dirigir el envío a otro servidor
+_WEBHOOK_HOSTS = frozenset({"discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com"})
 
 _EMAIL = re.compile(r"[\w.+%-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(
@@ -234,15 +237,28 @@ def _retry_delay(response: httpx.Response) -> float:
     return 1.0
 
 
+def _log(reason: str) -> None:
+    # Solo estado o tipo de error: la URL del webhook es un secreto y Actions publica los logs
+    print(f"discord: {reason}", file=sys.stderr, flush=True)
+
+
 def send_webhook(http: httpx.Client, url: str, embeds: list[dict], content: str | None = None,
                  sleep: Callable[[float], None] = time.sleep) -> bool:
+    url = url.strip() if url else url
     if not url or not (content or embeds) or (content and _text_size(content) > 2000):
         return False
     try:
         if len(chunk_embeds(embeds, max_chars=_MAX_EMBED_CHARS)) > 1:
             return False
+    except ValueError:
+        return False
+    try:
         target = httpx.URL(url).copy_merge_params({"wait": "true"})
     except (ValueError, httpx.InvalidURL):
+        _log("URL de webhook no válida")
+        return False
+    if target.scheme != "https" or target.host not in _WEBHOOK_HOSTS:
+        _log("URL de webhook no válida")
         return False
 
     body: dict = {"embeds": embeds, "allowed_mentions": {"parse": []}}
@@ -251,12 +267,16 @@ def send_webhook(http: httpx.Client, url: str, embeds: list[dict], content: str 
     for attempt in range(2):
         try:
             response = http.post(target, json=body, timeout=20, follow_redirects=False)
-        except (httpx.HTTPError, httpx.InvalidURL):
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            _log(type(exc).__name__)
             return False
         if response.status_code != 429 or attempt == 1:
+            if not response.is_success:
+                _log(f"HTTP {response.status_code}")
             return response.is_success
         delay = _retry_delay(response)
         if delay > _MAX_RETRY_DELAY:
+            _log(f"HTTP {response.status_code}")
             return False
         sleep(delay)
     return False

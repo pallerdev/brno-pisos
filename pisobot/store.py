@@ -14,6 +14,7 @@ _DEFAULTS = {
     "cache.json": {"transit": {}, "geo": {}},
     "state.json": {
         "revisar_last_id": None,
+        "revisar_retries": {},
         "pending": {},
         "last_digest": None,
         "failures": {},
@@ -40,8 +41,10 @@ def fingerprint(listing: Listing) -> str | None:
 
 
 class Store:
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, *, persist: bool = True):
         self.dir = data_dir
+        # En --dry-run el estado se lee pero nunca se escribe, ni en los guardados intermedios de una ejecución
+        self.persist = persist
         self.seen = self._load("seen.json")
         self.cache = self._load("cache.json")
         self.state = self._load("state.json")
@@ -91,6 +94,8 @@ class Store:
             self.seen[table] = {k: v for k, v in self.seen[table].items() if v >= limit}
 
     def save(self) -> None:
+        if not self.persist:
+            return
         self.dir.mkdir(parents=True, exist_ok=True)
         # Escritura a .tmp + os.replace: un corte a mitad no deja un JSON truncado.
         # La cola debe guardarse antes que los ids vistos: un corte entre archivos conserva los avisos pendientes.

@@ -72,36 +72,37 @@ def _run(dry_run: bool) -> int:
         cfg.secrets["DISCORD_BOT_TOKEN"] = ""
         cfg.secrets["DISCORD_REVISAR_CHANNEL_ID"] = ""
 
-    store = Store(ROOT / "data")
+    store = Store(ROOT / "data", persist=not dry_run)
     now = datetime.now(timezone.utc)
     today = now.astimezone(ZoneInfo(cfg.raw["departure"]["tz"])).date()
     labels = {point: name for name, point in cfg.destinations.items()}
     llm_cfg = cfg.raw["llm"]
 
-    with make_client(cfg.raw["user_agent"]) as http:
-        shops = _load_shops(cfg, http, store.dir / "supermarkets.json", today, dry_run)
-        # Nominatim limita las ejecuciones periódicas a cuatro peticiones por minuto.
-        geocoder = Geocoder(http, store.cache["geo"], min_interval=15, endpoint=env.get("NOMINATIM_URL") or NOMINATIM_URL)
-        token = cfg.secrets["DISCORD_BOT_TOKEN"]
-        discord = DiscordBot(http, token) if token else None
-        deps = Deps(
-            http=http,
-            collectors=build_collectors(http, cfg),
-            transit=TransitClient(http, store.cache["transit"], dest_labels=labels),
-            geocoder=geocoder,
-            llm=Gemini(
-                http, cfg.secrets["GEMINI_API_KEY"], llm_cfg["model"],
-                llm_cfg["daily_limit"], store.state["llm"], today,
-            ),
-            shops=shops,
-            send=_print_webhook if dry_run else partial(send_webhook, http),
-            discord=discord,
-            review_geocoder=geocoder.with_cache({}),
-            review_transit=TransitClient(http, {}, dest_labels=labels),
-        )
-        report = run(cfg, store, deps, now)
-
-    if not dry_run:
+    try:
+        with make_client(cfg.raw["user_agent"]) as http:
+            shops = _load_shops(cfg, http, store.dir / "supermarkets.json", today, dry_run)
+            # Nominatim limita las ejecuciones periódicas a cuatro peticiones por minuto.
+            geocoder = Geocoder(http, store.cache["geo"], min_interval=15, endpoint=env.get("NOMINATIM_URL") or NOMINATIM_URL)
+            token = cfg.secrets["DISCORD_BOT_TOKEN"]
+            discord = DiscordBot(http, token) if token else None
+            deps = Deps(
+                http=http,
+                collectors=build_collectors(http, cfg),
+                transit=TransitClient(http, store.cache["transit"], dest_labels=labels),
+                geocoder=geocoder,
+                llm=Gemini(
+                    http, cfg.secrets["GEMINI_API_KEY"], llm_cfg["model"],
+                    llm_cfg["daily_limit"], store.state["llm"], today,
+                ),
+                shops=shops,
+                send=_print_webhook if dry_run else partial(send_webhook, http),
+                discord=discord,
+                review_geocoder=geocoder.with_cache({}),
+                review_transit=TransitClient(http, {}, dest_labels=labels),
+            )
+            report = run(cfg, store, deps, now)
+    finally:
+        # Un fallo a mitad no puede perder los avisos ya enviados: se volverían a enviar en la próxima ejecución
         store.save()
     print(json.dumps(report, ensure_ascii=False, sort_keys=True))
     return 0

@@ -1,4 +1,5 @@
 import dataclasses
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -6,9 +7,11 @@ import httpx
 import pytest
 
 from pisobot.config import load_config
+from pisobot.enrich.transit import TransitClient
 from pisobot.llm import LlmResult
 from pisobot.models import Kind, Listing, Point, Shop, Trip
 from pisobot.pipeline import Deps, evaluate_pasted, run
+from pisobot.review import DiscordBot
 from pisobot.store import Store
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,6 +90,11 @@ class Sent(list):
     def __call__(self, url, embeds, content):
         self.append((url, embeds, content))
         return True
+
+
+def snow(ago=timedelta(hours=1), n=0):
+    """Id de Discord (snowflake) de un mensaje enviado hace `ago` respecto a MORNING."""
+    return str(((int((MORNING - ago).timestamp() * 1000) - 1420070400000) << 22) + n)
 
 
 def room(source_id="1", **kw):
@@ -170,23 +178,25 @@ def test_revisar_replies_with_both_profiles(cfg, tmp_path):
     llm = FakeLlm(LlmResult(summary_es="Habitación en Veveří", washing_machine=True, rent=7500, fees=0,
                             street="Kotlářská, Veveří"))
     discord = FakeDiscord([
-        {"id": "10", "author": {"bot": False}, "content": "Pronajmu pokoj v bytě 3+1, Kotlářská, 7500 Kč vše v ceně, pračka"},
-        {"id": "11", "author": {"bot": True}, "content": "respuesta anterior del bot"},
+        {"id": snow(n=0), "author": {"bot": False},
+         "content": "Pronajmu pokoj v bytě 3+1, Kotlářská, 7500 Kč vše v ceně, pračka"},
+        {"id": snow(n=1), "author": {"bot": True}, "content": "respuesta anterior del bot"},
     ])
     store = Store(tmp_path)
     run(cfg, store, deps_with([], llm=llm, discord=discord), MORNING)
     assert len(discord.replies) == 1 and llm.calls == 1
     message_id, note, embeds = discord.replies[0]
-    assert message_id == "10" and note is None
+    assert message_id == snow(n=0) and note is None
     assert ["[yo]" in embeds[0]["title"], "[grupo]" in embeds[1]["title"]] == [True, True]
     assert "Habitación en Veveří" in embeds[0]["description"]
-    assert store.state["revisar_last_id"] == "11"
+    assert store.state["revisar_last_id"] == snow(n=1)
     run(cfg, store, deps_with([], llm=llm, discord=discord), MORNING)
     assert len(discord.replies) == 1
 
 
 def test_revisar_text_without_location_asks_for_street(cfg, tmp_path):
-    discord = FakeDiscord([{"id": "20", "author": {}, "content": "Pronajmu pokoj, 7000 Kč, pračka, volný od prosince"}])
+    discord = FakeDiscord([{"id": snow(), "author": {},
+                            "content": "Pronajmu pokoj, 7000 Kč, pračka, volný od prosince"}])
     run(cfg, Store(tmp_path), deps_with([], discord=discord), MORNING)
     assert "calle" in discord.replies[0][1]
 
@@ -300,20 +310,21 @@ def test_review_cursor_advances_only_after_successful_reply(cfg, tmp_path):
             super().reply(channel, message_id, content, embeds)
             return len(self.replies) > 1
 
-    discord = Discord([{"id": i, "content": "texto corto"} for i in ("20", "21")])
+    first, second = snow(n=0), snow(n=1)
+    discord = Discord([{"id": i, "content": "texto corto"} for i in (first, second)])
     deps = deps_with([], discord=discord)
     store = Store(tmp_path)
     run(cfg, store, deps, MORNING)
     assert store.state["revisar_last_id"] is None
     run(cfg, store, deps, MORNING)
-    assert [reply[0] for reply in discord.replies] == ["20", "20", "21"]
-    assert store.state["revisar_last_id"] == "21"
+    assert [reply[0] for reply in discord.replies] == [first, first, second]
+    assert store.state["revisar_last_id"] == second
 
 
 def test_review_keeps_two_profile_embeds_visible_and_uses_ephemeral_enrichment(cfg, tmp_path):
     url = "https://www.ulovdomov.cz/inzerat/1"
     page = "Pronajmu byt 4+1, 8 000 Kč vše v ceně, pračka. Pekarska."
-    discord = FakeDiscord([{"id": "20", "content": url}])
+    discord = FakeDiscord([{"id": snow(), "content": url}])
     deps = deps_with([], llm=FakeLlm(LlmResult("Piso", street="Pekařská")), discord=discord)
     deps.http = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, text=page)))
     deps.review_geocoder = FakeGeocoder()
@@ -359,3 +370,265 @@ def test_collector_alerts_do_not_copy_exception_content(cfg, tmp_path, capsys):
         run(cfg, store, deps, MORNING)
     assert discord.posts == ["⚠️ El portal **fake** lleva 3 ejecuciones fallando (RuntimeError)."]
     assert "texto-privado" not in capsys.readouterr().err
+
+
+class Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+class SlowTransit(FakeTransit):
+    """Cada ruta consume tiempo del reloj simulado."""
+
+    def __init__(self, trips, clock, cost):
+        super().__init__(trips)
+        self.clock, self.cost = clock, cost
+
+    def trips(self, origin, dest, depart):
+        self.clock.now += self.cost
+        return super().trips(origin, dest, depart)
+
+
+def test_state_is_saved_after_each_portal(cfg, tmp_path):
+    class Interrupted(FakeCollector):
+        def fetch_list(self):
+            raise KeyboardInterrupt
+
+    deps = deps_with([FakeCollector("fake", [room()]), Interrupted("otro", [])])
+    with pytest.raises(KeyboardInterrupt):
+        run(cfg, Store(tmp_path), deps, MORNING)
+    assert not Store(tmp_path).is_new(room())
+
+
+def test_digest_failure_after_a_delivery_still_saves_it(cfg, tmp_path, capsys):
+    sent, store = Sent(), Store(tmp_path)
+    # Un embed fuera de los límites de Discord hace fallar el resumen en cada ejecución
+    store.state["pending"]["yo"] = [{"description": "x" * 5000}]
+    deps = deps_with([FakeCollector("fake", [room()])], sent=sent)
+    run(cfg, store, deps, EVENING)
+    assert len(sent) == 1
+    assert "resumen: fallo inesperado (ValueError)" in capsys.readouterr().err
+    reloaded = Store(tmp_path)
+    assert not reloaded.is_new(room())
+    run(cfg, reloaded, deps, EVENING)
+    assert len(sent) == 1
+
+
+def test_review_failure_does_not_skip_digest(cfg, tmp_path, capsys):
+    class Discord(FakeDiscord):
+        def reply(self, channel, message_id, content, embeds):
+            raise RuntimeError("boom")
+
+    sent, store = Sent(), Store(tmp_path)
+    store.state["pending"]["yo"] = [{"url": "https://example.com/1", "description": "x"}]
+    discord = Discord([{"id": snow(), "content": "texto corto"}])
+    run(cfg, store, deps_with([], discord=discord, sent=sent), EVENING)
+    assert len(sent) == 1 and sent[0][2].startswith("**Resumen diario")
+    assert "revisar: fallo inesperado (RuntimeError)" in capsys.readouterr().err
+    assert Store(tmp_path).state["last_digest"] == "2026-11-24"
+
+
+def test_prune_failure_does_not_lose_the_run(cfg, tmp_path, monkeypatch, capsys):
+    def prune(today):
+        raise OSError("disco")
+
+    store = Store(tmp_path)
+    monkeypatch.setattr(store, "prune", prune)
+    run(cfg, store, deps_with([FakeCollector("fake", [room()])]), MORNING)
+    assert "limpieza: fallo inesperado (OSError)" in capsys.readouterr().err
+    assert not Store(tmp_path).is_new(room())
+
+
+def test_budget_exceeded_stops_new_work_and_saves(cfg, tmp_path, capsys):
+    cfg.raw["run"] = {"budget_seconds": 100}
+    clock = Clock()
+    transit = SlowTransit(FAST, clock, 60)
+    listings = [room(str(i), area_m2=14 + i) for i in (1, 2, 3)]
+    other = dataclasses.replace(room("9", area_m2=30), source="otro")
+    discord = FakeDiscord([{"id": snow(), "content": "texto corto"}])
+    sent = Sent()
+    deps = deps_with([FakeCollector("fake", listings), FakeCollector("otro", [other])],
+                     transit=transit, discord=discord, sent=sent)
+    report = run(cfg, Store(tmp_path), deps, MORNING, clock=clock)
+    # Tras el segundo anuncio ya van 120 s: ni un tercero, ni el otro portal, ni #revisar
+    assert transit.calls == 2 and len(sent) == 2
+    assert report["presupuesto_agotado"] == 1 and "leidos_otro" not in report
+    assert discord.replies == []
+    reloaded = Store(tmp_path)
+    assert [reloaded.is_new(listing) for listing in listings] == [False, False, True]
+    assert capsys.readouterr().err.count("presupuesto") == 1
+
+
+@pytest.mark.parametrize("configured", [True, False])
+@pytest.mark.parametrize("cost,calls", [(419, 2), (421, 1)])
+def test_budget_is_seven_minutes_in_config_and_by_default(cfg, tmp_path, configured, cost, calls):
+    if not configured:
+        cfg.raw.pop("run")
+    clock = Clock()
+    transit = SlowTransit(FAST, clock, cost)
+    listings = [room(str(i), area_m2=14 + i) for i in (1, 2)]
+    run(cfg, Store(tmp_path), deps_with([FakeCollector("fake", listings)], transit=transit), MORNING, clock=clock)
+    assert transit.calls == calls
+
+
+class DiscordApi:
+    """API de Discord simulada: lista los mensajes y contesta a cada respuesta con el estado que toque."""
+
+    def __init__(self, messages, statuses=None):
+        self.messages, self.statuses = list(messages), dict(statuses or {})
+        self.attempts = []
+
+    def __call__(self, request):
+        if request.method == "GET":
+            after = int(request.url.params.get("after", 0))
+            return httpx.Response(200, json=[m for m in self.messages if int(m["id"]) > after])
+        message_id = json.loads(request.content)["message_reference"]["message_id"]
+        self.attempts.append(message_id)
+        return httpx.Response(self.statuses.get(message_id, 200), text="contenido-privado")
+
+    def bot(self):
+        return DiscordBot(httpx.Client(transport=httpx.MockTransport(self)), "tok")
+
+
+def short_message(message_id):
+    return {"id": message_id, "content": "texto corto"}
+
+
+def test_review_skips_a_message_discord_rejects_and_answers_the_next(cfg, tmp_path, capsys):
+    first, second = snow(n=0), snow(n=1)
+    api = DiscordApi([short_message(first), short_message(second)], {first: 403})
+    store = Store(tmp_path)
+    report = run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    assert api.attempts == [first, second]
+    assert store.state["revisar_last_id"] == second
+    assert report["revisar_omitidos"] == 1 and report["revisar_respondidos"] == 1
+    err = capsys.readouterr().err
+    assert "revisar: HTTP 403" in err and "contenido-privado" not in err and "texto corto" not in err
+    assert Store(tmp_path).state["revisar_last_id"] == second
+
+
+def test_review_keeps_the_cursor_on_a_transient_failure(cfg, tmp_path):
+    first, second = snow(n=0), snow(n=1)
+    api = DiscordApi([short_message(first), short_message(second)], {first: 500})
+    store = Store(tmp_path)
+    report = run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    assert api.attempts == [first]
+    assert store.state["revisar_last_id"] is None
+    assert store.state["revisar_retries"] == {first: 1}
+    assert report["revisar_fallidos"] == 1
+    api.statuses.clear()
+    run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    assert api.attempts == [first, first, second]
+    assert store.state["revisar_last_id"] == second and store.state["revisar_retries"] == {}
+
+
+def test_review_skips_a_message_after_three_transient_failures(cfg, tmp_path, capsys):
+    first, second = snow(n=0), snow(n=1)
+    api = DiscordApi([short_message(first), short_message(second)], {first: 500})
+    store = Store(tmp_path)
+    for expected in (1, 2):
+        run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+        assert store.state["revisar_last_id"] is None
+        assert store.state["revisar_retries"] == {first: expected}
+    report = run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    assert api.attempts == [first] * 3 + [second]
+    assert store.state["revisar_last_id"] == second and store.state["revisar_retries"] == {}
+    assert report["revisar_omitidos"] == 1
+    err = capsys.readouterr().err
+    assert "revisar: mensaje omitido tras 3 fallos seguidos" in err and "texto corto" not in err
+
+
+def test_review_failure_count_is_per_message_and_resets_on_success(cfg, tmp_path):
+    first, second = snow(n=0), snow(n=1)
+    api = DiscordApi([short_message(first), short_message(second)], {first: 500})
+    store = Store(tmp_path)
+    run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    api.statuses = {second: 500}
+    run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    assert store.state["revisar_last_id"] == first
+    assert store.state["revisar_retries"] == {second: 1}
+
+
+def test_review_first_run_only_answers_recent_messages(cfg, tmp_path):
+    old, recent = snow(timedelta(hours=25)), snow(timedelta(hours=23))
+    api = DiscordApi([short_message(old), short_message(recent)])
+    store = Store(tmp_path)
+    run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    assert api.attempts == [recent]
+    assert store.state["revisar_last_id"] == recent
+
+
+def test_review_with_a_cursor_answers_old_messages_too(cfg, tmp_path):
+    # Tras una caída larga del bot, lo pendiente se contesta aunque tenga días
+    cursor, old = snow(timedelta(days=5)), snow(timedelta(days=3))
+    api = DiscordApi([short_message(old)])
+    store = Store(tmp_path)
+    store.state["revisar_last_id"] = cursor
+    run(cfg, store, deps_with([], discord=api.bot()), MORNING)
+    assert api.attempts == [old] and store.state["revisar_last_id"] == old
+
+
+SREALITY_URL = "https://www.sreality.cz/detail/pronajem/byt/2+kk/brno-stred/123456789"
+TEXT_AD = "Pronajmu pokoj v bytě 3+1, Kotlářská, 7500 Kč vše v ceně, pračka"
+
+
+def sreality_deps(body="<html>captcha</html>"):
+    deps = deps_with([])
+    deps.http = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, text=body)))
+    return deps
+
+
+def test_pasted_link_that_cannot_be_read_falls_back_to_the_pasted_text(cfg):
+    note, embeds = evaluate_pasted(f"{SREALITY_URL} {TEXT_AD}", "1", cfg, sreality_deps(), MORNING)
+    # Se evalúa el texto pegado, con el enlace como referencia para quien lea la respuesta
+    assert len(embeds) == 2 and embeds[0]["url"] == SREALITY_URL
+    assert "7.500" in embeds[0]["description"] and "texto pegado" in embeds[0]["description"]
+
+
+def test_pasted_link_that_cannot_be_read_without_text_asks_for_the_text(cfg):
+    note, embeds = evaluate_pasted(SREALITY_URL, "1", cfg, sreality_deps(), MORNING)
+    assert note == "No he podido leer el anuncio de ese enlace; pega el texto del anuncio." and embeds == []
+
+
+def test_review_catch_all_logs_only_the_exception_type(cfg, tmp_path, monkeypatch, capsys):
+    def explode(*args):
+        raise RuntimeError("texto-privado")
+
+    monkeypatch.setattr("pisobot.pipeline.evaluate_pasted", explode)
+    discord = FakeDiscord([{"id": snow(), "content": "texto corto"}])
+    run(cfg, Store(tmp_path), deps_with([], discord=discord), MORNING)
+    assert discord.replies[0][1] == "No he podido evaluarlo (RuntimeError)."
+    err = capsys.readouterr().err
+    assert "revisar: RuntimeError" in err and "texto-privado" not in err
+
+
+def test_transitous_outage_costs_two_requests_and_every_listing_is_retried(cfg, tmp_path):
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(503)
+
+    transit = TransitClient(httpx.Client(transport=httpx.MockTransport(handler)), {})
+    listings = [room(str(i), area_m2=14 + i) for i in (1, 2, 3)]
+    store = Store(tmp_path)
+    report = run(cfg, store, deps_with([FakeCollector("fake", listings)], transit=transit), MORNING)
+    assert len(requests) == 2
+    assert report["transporte_reintentar"] == 3
+    assert all(store.is_new(listing) for listing in listings)
+    assert store.state["transit_retries"] == {listing.key: 1 for listing in listings}
+
+
+def test_review_cursor_is_saved_before_the_digest_starts(cfg, tmp_path):
+    def send(url, embeds, content):
+        raise KeyboardInterrupt
+
+    store = Store(tmp_path)
+    store.state["pending"]["yo"] = [{"url": "https://example.com/1", "description": "x"}]
+    message = snow()
+    with pytest.raises(KeyboardInterrupt):
+        run(cfg, store, deps_with([], discord=FakeDiscord([short_message(message)]), sent=send), EVENING)
+    assert Store(tmp_path).state["revisar_last_id"] == message

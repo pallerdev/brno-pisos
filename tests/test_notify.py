@@ -222,3 +222,68 @@ def test_send_webhook_failures():
         raise AssertionError("sin URL no debe haber petición")
 
     assert send_webhook(httpx.Client(transport=httpx.MockTransport(never)), "", [{"title": "t"}]) is False
+
+
+def _recording_client(status=204):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(status)
+
+    return httpx.Client(transport=httpx.MockTransport(handler)), calls
+
+
+@pytest.mark.parametrize("url", [
+    "discord.com/api/webhooks/1/token-secreto",
+    "http://discord.com/api/webhooks/1/token-secreto",
+    "https://example.com/api/webhooks/1/token-secreto",
+    "https://discord.com.example.com/api/webhooks/1/token-secreto",
+    "https://example.com/discord.com/api/webhooks/1/token-secreto",
+    "https://discord.com@example.com/api/webhooks/1/token-secreto",
+    '"https://discord.com/api/webhooks/1/token-secreto"',
+])
+def test_send_webhook_refuses_urls_outside_discord_without_a_request(url, capsys):
+    http, calls = _recording_client()
+    assert send_webhook(http, url, [{"title": "t"}]) is False
+    assert calls == []
+    captured = capsys.readouterr()
+    assert "token-secreto" not in captured.err and "token-secreto" not in captured.out
+    assert "discord: URL de webhook no válida" in captured.err
+
+
+@pytest.mark.parametrize("host", ["discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com"])
+def test_send_webhook_accepts_the_discord_hosts(host):
+    http, calls = _recording_client()
+    assert send_webhook(http, f"https://{host}/api/webhooks/1/abc", [{"title": "t"}])
+    assert [call.url.host for call in calls] == [host]
+
+
+def test_send_webhook_strips_whitespace_around_the_url():
+    http, calls = _recording_client()
+    assert send_webhook(http, "  https://discord.com/api/webhooks/1/abc\n", [{"title": "t"}])
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("status", [400, 404, 429, 500])
+def test_send_webhook_logs_only_the_status_of_a_failure(status, capsys):
+    http, _ = _recording_client(status)
+    assert send_webhook(http, "https://discord.com/api/webhooks/1/token-secreto", [{"title": "t"}],
+                        sleep=lambda seconds: None) is False
+    err = capsys.readouterr().err
+    assert err.splitlines() == [f"discord: HTTP {status}"]
+
+
+def test_send_webhook_logs_only_the_exception_type_of_a_transport_error(capsys):
+    def handler(request):
+        raise httpx.ReadTimeout(f"timeout for {request.url}", request=request)
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    assert send_webhook(http, "https://discord.com/api/webhooks/1/token-secreto", [{"title": "t"}]) is False
+    assert capsys.readouterr().err.splitlines() == ["discord: ReadTimeout"]
+
+
+def test_send_webhook_logs_nothing_on_success(capsys):
+    http, _ = _recording_client()
+    assert send_webhook(http, "https://discord.com/api/webhooks/1/abc", [{"title": "t"}])
+    assert capsys.readouterr().err == ""

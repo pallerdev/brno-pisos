@@ -11,6 +11,22 @@ _SNOWFLAKE = re.compile(r"[0-9]{1,20}")
 _INITIAL_LIMIT = 50
 _PAGE_LIMIT = 100
 _CONTENT_LIMIT = 1900
+_TRAILING_PUNCTUATION = ".,;:!?"
+_CLOSERS = {")": "(", "]": "["}
+
+
+def _trim_url(url: str) -> tuple[str, list[str]]:
+    """Quita la puntuación final y los cierres que el enlace no abre; devuelve también esos cierres."""
+    closers: list[str] = []
+    while True:
+        trimmed = url.rstrip(_TRAILING_PUNCTUATION)
+        last = trimmed[-1:]
+        if last in _CLOSERS and trimmed.count(last) > trimmed.count(_CLOSERS[last]):
+            closers.append(last)
+            trimmed = trimmed[:-1]
+        if trimmed == url:
+            return url, closers
+        url = trimmed
 
 
 def split_url(content: str) -> tuple[str | None, str]:
@@ -19,9 +35,25 @@ def split_url(content: str) -> tuple[str | None, str]:
         return None, content.strip()
     # Discord rodea con <...> los enlaces sin vista previa.
     wrapped, bare = match.groups()
-    url = wrapped if bare is None else bare.rstrip(".,;:!?")
-    text = f"{content[:match.start()]} {content[match.end():]}"
+    before = content[:match.start()]
+    if bare is None:
+        url = wrapped
+    else:
+        url, closers = _trim_url(bare)
+        # "(https://…)": el cierre se va del enlace y también su paréntesis de apertura del texto
+        for closer in closers:
+            if before.endswith(_CLOSERS[closer]):
+                before = before[:-1]
+    text = f"{before} {content[match.end():]}"
     return url, " ".join(text.split())
+
+
+class ReplyRejected(Exception):
+    """Discord rechaza la respuesta (4xx salvo 429): reintentarla daría siempre el mismo error."""
+
+    def __init__(self, status: int):
+        super().__init__(f"HTTP {status}")
+        self.status = status
 
 
 def _messages_url(channel_id: str) -> str:
@@ -70,24 +102,30 @@ class DiscordBot:
                 raise ValueError("Discord: la paginación de mensajes no avanza")
             after = new[-1]["id"]
 
-    def _send(self, channel_id: str, body: dict) -> bool:
+    def _send(self, channel_id: str, body: dict) -> int | None:
+        """Código HTTP de la respuesta; None si no hubo respuesta (red, id de canal inválido)."""
         body["allowed_mentions"] = {"parse": []}
         try:
             response = self.http.post(
                 _messages_url(channel_id), json=body, headers=self.headers, timeout=20, follow_redirects=False
             )
         except (httpx.HTTPError, ValueError):
-            return False
-        return response.is_success
+            return None
+        return response.status_code
 
     def reply(self, channel_id: str, message_id: str, content: str | None, embeds: list[dict]) -> bool:
+        """True si Discord lo acepta; False si conviene reintentar. Lanza ReplyRejected si no tiene remedio."""
         body = {
             "embeds": embeds[:10],
             "message_reference": {"message_id": message_id, "fail_if_not_exists": False},
         }
         if content:
             body["content"] = content[:_CONTENT_LIMIT]
-        return self._send(channel_id, body)
+        status = self._send(channel_id, body)
+        if status is not None and 400 <= status < 500 and status != 429:
+            raise ReplyRejected(status)
+        return status is not None and httpx.codes.is_success(status)
 
     def post(self, channel_id: str, content: str) -> bool:
-        return self._send(channel_id, {"content": content[:_CONTENT_LIMIT]})
+        status = self._send(channel_id, {"content": content[:_CONTENT_LIMIT]})
+        return status is not None and httpx.codes.is_success(status)

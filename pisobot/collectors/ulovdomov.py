@@ -13,10 +13,11 @@ from pisobot.parse_text import norm, normalize_disposition
 API_URL = "https://ud.api.ulovdomov.cz/v1/offer/find"
 BOUNDS = {"northEast": {"lat": 49.30, "lng": 16.75}, "southWest": {"lat": 49.10, "lng": 16.45}}
 MAX_PRICE = 48000  # techo del perfil grupo con 4 personas; el resto lo decide el prefiltro
+# Los importes llevan a veces el formato checo "2.550,- Kč"
 _OCCUPANCY_FEES = re.compile(
-    r"\bzaloh[ay] na sluzby (?:je )?(?P<base>\d[\d .]*?)\s*kc"
+    r"\bzaloh[ay] na sluzby (?:je )?(?P<base>\d[\d .]*?)(?:,-)?\s*kc"
     r"[ /a-z.]*1 osob[au](?:\s*/\s*mes[a-z.]*)?\s*,\s*"
-    r"kazda dalsi osoba\s*\+\s*(?P<extra>\d[\d .]*?)\s*kc"
+    r"kazda dalsi osoba\s*\+\s*(?P<extra>\d[\d .]*?)(?:,-)?\s*kc"
 )
 
 
@@ -85,8 +86,10 @@ def _listing(offer: dict) -> Listing:
     if fees is None and offer.get("monthlyFeesPrice") is None and rent is not None and not room:
         match = _OCCUPANCY_FEES.search(norm(description))
         if match:
-            fees = price_czk(f"{match['base']} Kč")
-            extra = price_czk(f"{match['extra']} Kč") or 0
+            base, supplement = price_czk(f"{match['base']} Kč"), price_czk(f"{match['extra']} Kč")
+            # Sin los dos importes no hay desglose fiable: un suplemento sin base daría poplatky desconocidos
+            if base is not None and supplement is not None:
+                fees, extra = base, supplement
     # En una habitación `area` puede ser la del piso entero (62 m² para un cuarto de tres camas)
     area = None if room else _area(offer.get("area"))
     return Listing(

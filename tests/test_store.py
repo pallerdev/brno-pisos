@@ -143,3 +143,10 @@ def test_corrupt_seen_file_raises_naming_the_file(tmp_path):
     (tmp_path / "seen.json").write_text('{"ids": {"a": ', encoding="utf-8")
     with pytest.raises(ValueError, match="seen.json"):
         Store(tmp_path)
+
+
+def test_store_without_persistence_never_writes(tmp_path):
+    store = Store(tmp_path / "data", persist=False)
+    store.mark_seen(make(), date(2026, 11, 24))
+    store.save()
+    assert not (tmp_path / "data").exists()

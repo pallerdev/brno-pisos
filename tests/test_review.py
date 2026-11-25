@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from pisobot.review import API, DiscordBot, split_url
+from pisobot.review import API, DiscordBot, ReplyRejected, split_url
 
 
 @pytest.mark.parametrize(
@@ -17,6 +17,15 @@ from pisobot.review import API, DiscordBot, split_url
         ('Pronajmu pokoj, 7000 Kč', (None, 'Pronajmu pokoj, 7000 Kč')),
         ('<mensaje> <https://example.com/>', ('https://example.com/', '<mensaje>')),
         ('https://example.com/oferta.php. Pračka', ('https://example.com/oferta.php', 'Pračka')),
+        ('(https://example.com/oferta)', ('https://example.com/oferta', '')),
+        ('mira (https://example.com/oferta), muy bien', ('https://example.com/oferta', 'mira muy bien')),
+        ('[https://example.com/oferta]', ('https://example.com/oferta', '')),
+        ('(https://example.com/oferta.)', ('https://example.com/oferta', '')),
+        ('ver https://example.com/oferta).', ('https://example.com/oferta', 'ver')),
+        # Un paréntesis que el propio enlace abre y cierra forma parte de él
+        ('https://es.wikipedia.org/wiki/Brno_(ciudad)', ('https://es.wikipedia.org/wiki/Brno_(ciudad)', '')),
+        ('(https://es.wikipedia.org/wiki/Brno_(ciudad))', ('https://es.wikipedia.org/wiki/Brno_(ciudad)', '')),
+        ('https://example.com/a[1]', ('https://example.com/a[1]', '')),
     ],
 )
 def test_split_url(content, expected):
@@ -138,3 +147,24 @@ def test_invalid_channel_fails_without_an_authenticated_request():
         with pytest.raises(ValueError, match='id del canal'):
             bot.new_messages('nombre-de-canal', None)
         assert bot.post('nombre-de-canal', 'aviso') is False
+
+
+@pytest.mark.parametrize('status', [400, 403, 404])
+def test_reply_raises_when_discord_rejects_it_for_good(status):
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(status, text='contenido'))) as http:
+        with pytest.raises(ReplyRejected) as error:
+            DiscordBot(http, 'tok').reply('555', '12', 'nota', [{'title': 't'}])
+
+    assert error.value.status == status
+    assert 'contenido' not in str(error.value)
+
+
+@pytest.mark.parametrize('status', [302, 429, 500, 502])
+def test_reply_returns_false_when_a_retry_may_work(status):
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(status))) as http:
+        assert DiscordBot(http, 'tok').reply('555', '12', 'nota', []) is False
+
+
+def test_alert_post_never_raises_for_a_rejection():
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as http:
+        assert DiscordBot(http, 'tok').post('555', 'aviso') is False

@@ -17,6 +17,8 @@ from pisobot.models import Point, Trip
 
 TRANSITOUS_URL = "https://api.transitous.org/api/v5/plan"
 TROLLEYBUS_ROUTE_TYPE = 800  # en el GTFS de IDS JMK; Transitous los devuelve como BUS
+# Con Transitous caído cada ruta cuesta un timeout: tras dos fallos seguidos se deja de llamar en esa ejecución
+MAX_CONSECUTIVE_FAILURES = 2
 
 
 def _trip(itinerary: dict) -> Trip:
@@ -68,6 +70,7 @@ class TransitClient:
         self.cache = cache
         # El caché se commitea en un repo público: los destinos sensibles (oficina) usan etiqueta, nunca coordenadas
         self.dest_labels = dest_labels or {}
+        self.failures = 0
 
     def _key(self, origin: Point, dest: Point) -> str:
         if dest in self.dest_labels:
@@ -80,6 +83,8 @@ class TransitClient:
         key = self._key(origin, dest)
         if key in self.cache:
             return [Trip(**t) for t in self.cache[key]]
+        if self.failures >= MAX_CONSECUTIVE_FAILURES:
+            return None
         try:
             response = self.http.get(TRANSITOUS_URL, params={
                 "fromPlace": f"{origin.lat},{origin.lon}",
@@ -90,7 +95,9 @@ class TransitClient:
             response.raise_for_status()
             trips = parse_plan(response.json())
         except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError):
+            self.failures += 1
             return None
+        self.failures = 0
         # Una lista vacía también es una respuesta válida ("sin ruta"): se cachea para no repetir la petición
         self.cache[key] = [asdict(t) for t in trips]
         return trips

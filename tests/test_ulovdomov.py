@@ -326,3 +326,39 @@ def test_max_price_covers_the_most_demanding_profile():
 def test_room_area_is_never_taken_from_the_portal():
     # En coliving `area` puede ser la del piso entero (62 m² para un cuarto de tres camas)
     assert parse_offers(_with_offer(ROOMS, area=13))[0].area_m2 is None
+
+
+def test_per_occupant_services_of_every_fixture_offer():
+    # El tercero escribe los importes como "2.550,- Kč" y "850,- Kč"
+    assert [(l.source_id, l.fees, l.fees_per_extra_person) for l in parse_offers(FLATS)] == [
+        ("5683439", 2300, 600), ("5688278", 2550, 850), ("5688246", 2550, 850),
+    ]
+
+
+@pytest.mark.parametrize("phrase,expected", [
+    ("Záloha na služby je 2.550,- Kč / 1 osoba / měsíc, každá další osoba + 850,- Kč / měsíc.", (2550, 850)),
+    ("Záloha na služby je 2.300 Kč / 1 osoba / měsíc, každá další osoba + 600 Kč / měsíc.", (2300, 600)),
+    ("Záloha na služby je 2.550,- Kč / 1 osoba / měsíc, každá další osoba + 850 Kč / měsíc.", (2550, 850)),
+    ("Záloha na služby je 0 Kč / 1 osoba / měsíc, každá další osoba + 600 Kč / měsíc.", (None, 0)),
+    ("Záloha na služby je 2.300,50 Kč / 1 osoba / měsíc, každá další osoba + 600 Kč / měsíc.", (None, 0)),
+    ("Záloha na služby je 2.300 Kč / 1 osoba / měsíc, každá další osoba + 600,50 Kč / měsíc.", (None, 0)),
+])
+def test_per_occupant_services_need_both_amounts_or_neither(phrase, expected):
+    listing = parse_offers(_with_offer(FLATS, description=phrase, priceNote=None, monthlyFeesPrice=_MISSING))[0]
+    assert (listing.fees, listing.fees_per_extra_person) == expected
+
+
+def test_structured_monthly_fees_win_over_the_text_phrase():
+    phrase = "Záloha na služby je 2.550,- Kč / 1 osoba / měsíc, každá další osoba + 850,- Kč / měsíc."
+    fees = {"value": 900, "currency": "CZK"}
+    listing = parse_offers(_with_offer(FLATS, description=phrase, monthlyFeesPrice=fees))[0]
+    assert (listing.fees, listing.fees_per_extra_person) == (900, 0)
+    # Un campo estructurado inválido tampoco deja que el texto lo sustituya
+    broken = parse_offers(_with_offer(FLATS, description=phrase, monthlyFeesPrice={"value": 9, "currency": "EUR"}))[0]
+    assert (broken.fees, broken.fees_per_extra_person) == (None, 0)
+
+
+def test_rooms_ignore_the_per_occupant_phrase():
+    phrase = "Záloha na služby je 2.550,- Kč / 1 osoba / měsíc, každá další osoba + 850,- Kč / měsíc."
+    room = parse_offers(_with_offer(ROOMS, description=phrase, monthlyFeesPrice=_MISSING))[0]
+    assert (room.fees, room.fees_per_extra_person) == (None, 0)
