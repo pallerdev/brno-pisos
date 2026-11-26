@@ -4,14 +4,24 @@
  "failures": {},
  "last_digest": "2026-11-25",
  "llm": {
-  "count": 20,
-  "date": "2026-11-25"
+  "count": 1,
+  "date": "2026-11-26"
  },
  "pending": {
   "grupo": [],
-  "yo": []
+  "yo": [
+   {
+    "color": 15844367,
+    "description": "🏠 Piso entero 1+1 · Bazoš · sin comisión\n💰 10.000 CZK/mes en total: 9.000 alquiler + ~1.000 energías (estimado)\n🚋 oficina: 20 min · tren S3 → tranvía 9 · 8 min andando a la parada\n🛒 Albert · 215 m · ~4 min\n🧺 Lavadora: ? · 🛋️ Amueblado: sí\n📍 Ubicación aproximada: tiempos y distancias orientativos\n❓ Preguntar: lavadora no mencionada\n📝 Se alquila apartamento de 1+1 reformado y semi amueblado en la zona de Židenice, Brno. El precio es de 9000 CZK más gastos, sin fianza ni comisión de agencia. Es ideal para una pareja de no fumadores y se aceptan mascotas.",
+    "footer": {
+     "text": "Rutas: Transitous (transitous.org)"
+    },
+    "title": "⚠️ Pronájem 1+1 Brno za 9000kč+ ink. bez kauce bez provize",
+    "url": "https://reality.bazos.cz/inzerat/226952804/nabidka-pronajem-11-brno-zidenice-za-9000kcmesicne-inkaso.php"
+   }
+  ]
  },
- "revisar_last_id": "1575098618313052231",
+ "revisar_last_id": "1575243588961566803",
  "revisar_retries": {},
  "transit_retries": {}
 }
