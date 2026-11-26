@@ -36,6 +36,74 @@
   "žebětín, bukova, brno": null
  },
  "transit": {
+  "49.1665,16.5770>station": [
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "8"
+    ],
+    "minutes": 27,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "8"
+    ],
+    "minutes": 27,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "8"
+    ],
+    "minutes": 27,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "7"
+    ],
+    "minutes": 27,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "8"
+    ],
+    "minutes": 27,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "8"
+    ],
+    "minutes": 27,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   }
+  ],
   "49.1710,16.5605>work": [
    {
     "first_walk_min": 10,
@@ -477,6 +545,37 @@
     "first_walk_min": 13,
     "lines": [],
     "minutes": 13,
+    "modes": [],
+    "transfers": 0
+   }
+  ],
+  "49.1845,16.6230>work": [
+   {
+    "first_walk_min": 6,
+    "lines": [
+     "64"
+    ],
+    "minutes": 15,
+    "modes": [
+     "BUS"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 6,
+    "lines": [
+     "67"
+    ],
+    "minutes": 13,
+    "modes": [
+     "BUS"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 14,
+    "lines": [],
+    "minutes": 14,
     "modes": [],
     "transfers": 0
    }
@@ -1103,6 +1202,52 @@
      "REGIONAL_RAIL"
     ],
     "transfers": 1
+   }
+  ],
+  "49.1985,16.5940>station": [
+   {
+    "first_walk_min": 2,
+    "lines": [
+     "4"
+    ],
+    "minutes": 18,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 2,
+    "lines": [
+     "4"
+    ],
+    "minutes": 18,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 2,
+    "lines": [
+     "4"
+    ],
+    "minutes": 18,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 2,
+    "lines": [
+     "4"
+    ],
+    "minutes": 18,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
    }
   ],
   "49.1995,16.6195>station": [
