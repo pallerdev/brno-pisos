@@ -4,6 +4,10 @@
    49.2198987,
    16.5490407
   ],
+  "brno - židenice, brno": [
+   49.1979615,
+   16.6435716
+  ],
   "březová, brno - jundrov, brno": [
    49.2107124,
    16.5502187
@@ -27,6 +31,7 @@
   ],
   "veveří, staňkova, brno": null,
   "zábrdovice, tkalcovská, brno": null,
+  "černá pole, mathonova, brno": null,
   "štýřice, renneská třída, brno": null,
   "žebětín, bukova, brno": null
  },
@@ -533,6 +538,90 @@
     "transfers": 0
    }
   ],
+  "49.1885,16.5320>station": [
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "37",
+     "6",
+     "12"
+    ],
+    "minutes": 37,
+    "modes": [
+     "TROLLEYBUS",
+     "TRAM",
+     "TRAM"
+    ],
+    "transfers": 2
+   },
+   {
+    "first_walk_min": 5,
+    "lines": [
+     "E50",
+     "8"
+    ],
+    "minutes": 33,
+    "modes": [
+     "BUS",
+     "TRAM"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "50",
+     "8"
+    ],
+    "minutes": 38,
+    "modes": [
+     "BUS",
+     "TRAM"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "37",
+     "1"
+    ],
+    "minutes": 40,
+    "modes": [
+     "TROLLEYBUS",
+     "TRAM"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "37",
+     "6",
+     "12"
+    ],
+    "minutes": 37,
+    "modes": [
+     "TROLLEYBUS",
+     "TRAM",
+     "TRAM"
+    ],
+    "transfers": 2
+   },
+   {
+    "first_walk_min": 13,
+    "lines": [
+     "52",
+     "1"
+    ],
+    "minutes": 41,
+    "modes": [
+     "BUS",
+     "TRAM"
+    ],
+    "transfers": 1
+   }
+  ],
   "49.1935,16.6070>work": [
    {
     "first_walk_min": 5,
@@ -940,6 +1029,80 @@
      "TRAM"
     ],
     "transfers": 0
+   }
+  ],
+  "49.1980,16.6435>station": [
+   {
+    "first_walk_min": 10,
+    "lines": [
+     "3",
+     "S3"
+    ],
+    "minutes": 23,
+    "modes": [
+     "TRAM",
+     "REGIONAL_RAIL"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "9"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "9"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 10,
+    "lines": [
+     "201",
+     "S2"
+    ],
+    "minutes": 21,
+    "modes": [
+     "BUS",
+     "REGIONAL_RAIL"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 9,
+    "lines": [
+     "9"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 10,
+    "lines": [
+     "3",
+     "S3"
+    ],
+    "minutes": 24,
+    "modes": [
+     "TRAM",
+     "REGIONAL_RAIL"
+    ],
+    "transfers": 1
    }
   ],
   "49.1995,16.6195>station": [

@@ -4,11 +4,21 @@
  "failures": {},
  "last_digest": "2026-11-25",
  "llm": {
-  "count": 1,
+  "count": 2,
   "date": "2026-11-26"
  },
  "pending": {
-  "grupo": [],
+  "grupo": [
+   {
+    "color": 15844367,
+    "description": "🏠 Piso entero 3+1 · 100 m² · iDNES\n💰 3 pers. × 10.834 (total 32.500): 23.000 alquiler + 7.000 poplatky + ~2.500 energías (estimado)\n🚋 hlavní nádraží: 21 min · bus 201 → tren S2 · 10 min andando a la parada\n🛒 Albert · 539 m · ~9 min\n🧺 Lavadora: ? · 🛋️ Amueblado: sí\n📅 Libre desde 01.01.2027\n📍 Ubicación aproximada: tiempos y distancias orientativos\n❓ Preguntar: lavadora no mencionada\n📝 Se ofrece en alquiler la planta baja de una casa familiar de 3+1 y 100 m² ubicada en la calle Stejskalova, en la zona de Židenice, Brno. El piso está parcialmente amueblado, cuenta con acceso a un patio y dispone de una parada de transporte público a un minuto. Las condiciones incluyen un pago adic…",
+    "footer": {
+     "text": "Rutas: Transitous (transitous.org)"
+    },
+    "title": "⚠️ pronájem bytu 3+1 100 m²",
+    "url": "https://reality.idnes.cz/detail/pronajem/byt/brno/6afeef82ace5eb7d49091f62/"
+   }
+  ],
   "yo": [
    {
     "color": 15844367,
