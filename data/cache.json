@@ -1,5 +1,9 @@
 {
  "geo": {
+  "babičkova, brno - černá pole, brno": [
+   49.2122191,
+   16.6201882
+  ],
   "branka, brno, brno": [
    49.2198987,
    16.5490407
@@ -29,11 +33,19 @@
    49.1747048,
    16.5525931
   ],
+  "teyschlova, brno - bystrc, brno": [
+   49.2165831,
+   16.5021189
+  ],
   "veveří, staňkova, brno": null,
   "zábrdovice, tkalcovská, brno": null,
   "černá pole, mathonova, brno": null,
   "štýřice, renneská třída, brno": null,
-  "žebětín, bukova, brno": null
+  "žebětín, bukova, brno": null,
+  "židenice, táborská, brno": [
+   49.1955133,
+   16.650191
+  ]
  },
  "transit": {
   "49.1665,16.5770>station": [
@@ -804,6 +816,41 @@
     "lines": [],
     "minutes": 21,
     "modes": [],
+    "transfers": 0
+   }
+  ],
+  "49.1955,16.6500>work": [
+   {
+    "first_walk_min": 1,
+    "lines": [
+     "9"
+    ],
+    "minutes": 12,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 1,
+    "lines": [
+     "9"
+    ],
+    "minutes": 12,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 1,
+    "lines": [
+     "9"
+    ],
+    "minutes": 12,
+    "modes": [
+     "TRAM"
+    ],
     "transfers": 0
    }
   ],
@@ -1924,6 +1971,87 @@
     "transfers": 2
    }
   ],
+  "49.2120,16.6200>station": [
+   {
+    "first_walk_min": 5,
+    "lines": [
+     "9"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 3,
+    "lines": [
+     "46",
+     "S3"
+    ],
+    "minutes": 24,
+    "modes": [
+     "BUS",
+     "REGIONAL_RAIL"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 5,
+    "lines": [
+     "7"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 5,
+    "lines": [
+     "9"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 5,
+    "lines": [
+     "9"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 5,
+    "lines": [
+     "7"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 5,
+    "lines": [
+     "9"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   }
+  ],
   "49.2120,16.6215>station": [
    {
     "first_walk_min": 5,
@@ -2097,6 +2225,52 @@
      "12"
     ],
     "minutes": 31,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   }
+  ],
+  "49.2165,16.5020>station": [
+   {
+    "first_walk_min": 11,
+    "lines": [
+     "1"
+    ],
+    "minutes": 47,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 11,
+    "lines": [
+     "1"
+    ],
+    "minutes": 47,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 11,
+    "lines": [
+     "1"
+    ],
+    "minutes": 47,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 11,
+    "lines": [
+     "1"
+    ],
+    "minutes": 47,
     "modes": [
      "TRAM"
     ],
