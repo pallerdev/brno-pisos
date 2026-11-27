@@ -2,34 +2,14 @@
  "deliveries": {},
  "failure_alerted": {},
  "failures": {},
- "last_digest": "2026-11-26",
+ "last_digest": "2026-11-27",
  "llm": {
-  "count": 2,
+  "count": 5,
   "date": "2026-11-27"
  },
  "pending": {
-  "grupo": [
-   {
-    "color": 15844367,
-    "description": "🏠 Piso entero 3+1 · 76 m² · iDNES · con comisión\n💰 3 pers. × 10.834 (total 32.500): 24.000 alquiler + 6.000 poplatky + ~2.500 energías (estimado)\n🚋 hlavní nádraží: 24 min · bus 46 → tren S3 · 3 min andando a la parada\n🛒 Eso Market · 264 m · ~5 min\n🧺 Lavadora: sí · 🛋️ Amueblado: sí\n📅 Libre desde 01.12.2026\n📍 Ubicación aproximada: tiempos y distancias orientativos\n❓ Preguntar: calefacción eléctrica: energías más altas\n📝 Se alquila un espacioso y luminoso piso de 3+1 y 76 metros cuadrados situado en la popular zona de Černá Pole en Brno, en la calle Babičkova. El inmueble se ofrece amueblado, cuenta con balcón y lavadora, y está listo para entrar a vivir. Las condiciones de precio incluyen gastos adicionales por se…",
-    "footer": {
-     "text": "Rutas: Transitous (transitous.org)"
-    },
-    "title": "⚠️ pronájem bytu 3+1 76 m²",
-    "url": "https://reality.idnes.cz/detail/pronajem/byt/brno-babickova/6afd7e3197bfababc80416d7/"
-   }
-  ],
-  "yo": [
-   {
-    "color": 15844367,
-    "description": "🏠 Habitación 3+kk · 15 m² · eSpolubydleni\n💰 10.000 CZK/mes en total: 10.000 alquiler\n🚋 oficina: 12 min · tranvía 9 directo · 1 min andando a la parada\n🛒 COOP · 551 m · ~9 min\n🧺 Lavadora: sí · 🛋️ Amueblado: no\n📍 Ubicación aproximada: tiempos y distancias orientativos\n❓ Preguntar: sin amueblar\n📝 Se ofrece una habitacion individual en un piso compartido de tipo 3+1 ubicado en la zona de Židenice, en la calle Táborská en Brno. El piso es tranquilo, cuenta con balcon, cocina equipada y bano separado, ideal para personas no fumadoras y con afinidad personal. Se busca companero de piso trabajad…",
-    "footer": {
-     "text": "Rutas: Transitous (transitous.org)"
-    },
-    "title": "⚠️ Nabízím 1 místo 1L pokoj | Cihlový byt 3+1(kk)",
-    "url": "https://www.espolubydleni.cz/podnajem-spolubydlici/555985-pronajem-cihlovy-byt-3-1-zidenice-brno.htm"
-   }
-  ]
+  "grupo": [],
+  "yo": []
  },
  "revisar_last_id": "1575243588961566803",
  "revisar_retries": {},

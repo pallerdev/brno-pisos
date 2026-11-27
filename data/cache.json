@@ -12,6 +12,7 @@
    49.1979615,
    16.6435716
   ],
+  "bystrc, foltýnova, brno": null,
   "březová, brno - jundrov, brno": [
    49.2107124,
    16.5502187
@@ -114,6 +115,58 @@
      "TRAM"
     ],
     "transfers": 0
+   }
+  ],
+  "49.1680,16.5525>station": [
+   {
+    "first_walk_min": 6,
+    "lines": [
+     "6",
+     "8"
+    ],
+    "minutes": 30,
+    "modes": [
+     "TRAM",
+     "TRAM"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 6,
+    "lines": [
+     "7"
+    ],
+    "minutes": 28,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 6,
+    "lines": [
+     "6",
+     "8"
+    ],
+    "minutes": 32,
+    "modes": [
+     "TRAM",
+     "TRAM"
+    ],
+    "transfers": 1
+   },
+   {
+    "first_walk_min": 6,
+    "lines": [
+     "6",
+     "8"
+    ],
+    "minutes": 30,
+    "modes": [
+     "TRAM",
+     "TRAM"
+    ],
+    "transfers": 1
    }
   ],
   "49.1710,16.5605>work": [
@@ -2271,6 +2324,93 @@
      "1"
     ],
     "minutes": 47,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   }
+  ],
+  "49.2165,16.6180>station": [
+   {
+    "first_walk_min": 3,
+    "lines": [
+     "7",
+     "72",
+     "S3"
+    ],
+    "minutes": 24,
+    "modes": [
+     "TRAM",
+     "BUS",
+     "REGIONAL_RAIL"
+    ],
+    "transfers": 2
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "7"
+    ],
+    "minutes": 26,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "9"
+    ],
+    "minutes": 26,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "9"
+    ],
+    "minutes": 26,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "7"
+    ],
+    "minutes": 26,
+    "modes": [
+     "TRAM"
+    ],
+    "transfers": 0
+   },
+   {
+    "first_walk_min": 3,
+    "lines": [
+     "9",
+     "84",
+     "S3"
+    ],
+    "minutes": 25,
+    "modes": [
+     "TRAM",
+     "BUS",
+     "REGIONAL_RAIL"
+    ],
+    "transfers": 2
+   },
+   {
+    "first_walk_min": 4,
+    "lines": [
+     "9"
+    ],
+    "minutes": 26,
     "modes": [
      "TRAM"
     ],
