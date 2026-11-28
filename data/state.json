@@ -4,12 +4,32 @@
  "failures": {},
  "last_digest": "2026-11-27",
  "llm": {
-  "count": 5,
-  "date": "2026-11-27"
+  "count": 3,
+  "date": "2026-11-28"
  },
  "pending": {
-  "grupo": [],
-  "yo": []
+  "grupo": [
+   {
+    "color": 15844367,
+    "description": "🏠 Piso entero 3+1 · 95 m² · UlovDomov · con comisión\n💰 3 pers. × 8.834 (total 26.500): 17.900 alquiler + 6.100 poplatky + ~2.500 energías (estimado)\n🚋 hlavní nádraží: 20 min · tranvía 9 directo · 5 min andando a la parada\n🛒 Brněnka · 153 m · ~3 min\n🧺 Lavadora: ? · 🛋️ Amueblado: no · 🌳 Lužánky 916 m\n📅 Fianza 45.000\n❓ Preguntar: lavadora no mencionada, sin amueblar\n📝 Se alquila un piso luminoso y tranquilo de 95 m2 situado en la calle Příční, en el barrio de Zábrdovice, Brno. La vivienda está reformada, no amueblada (salvo cocina equipada) y cuenta con balcón y ascensor. Se alquila para un máximo de 3 personas, sin animales y está disponible de forma inmediata.",
+    "footer": {
+     "text": "Rutas: Transitous (transitous.org)"
+    },
+    "title": "⚠️ Pronájem bytu 3+1 95 m2",
+    "url": "https://www.ulovdomov.cz/inzerat/pronajem-brno-zabrdovice-pricni-3-1/5688974"
+   }
+  ],
+  "yo": [
+   {
+    "color": 15844367,
+    "description": "🏠 Habitación 2+kk · eSpolubydleni\n💰 7.900 CZK/mes en total: 7.900 alquiler (energías incluidas)\n🚋 oficina: sin calcular\n🛒 sin datos\n🧺 Lavadora: sí · 🛋️ Amueblado: sí\n📍 Ubicación aproximada: tiempos y distancias orientativos\n❓ Preguntar: transporte sin calcular, ubicación desconocida: falta la calle\n📝 Se ofrece 1 plaza en habitación individual dentro de una casa compartida en Královo Pole, en la calle Slovinská, cerca de la universidad veterinaria y bien comunicado por transporte público. El alojamiento cuenta con cocina equipada, terraza, jardín, lavadora, secadora y ambiente tranquilo ideal pa…",
+    "footer": {
+     "text": "Rutas: Transitous (transitous.org)"
+    },
+    "title": "⚠️ ⭐ Nabízím 1 místo 1L pokoj | byt v RD 2+1(kk)",
+    "url": "https://www.espolubydleni.cz/podnajem-spolubydlici/556002-pronajem-byt-v-rd-2-1-kralovo-pole-brno.htm"
+   }
+  ]
  },
  "revisar_last_id": "1575243588961566803",
  "revisar_retries": {},
